@@ -1,0 +1,362 @@
+// AddLightingProgramScreen.kt — Nouvelle version alignée sur le design de LightingProgramsScreen
+package tn.esprit.sansa.ui.screens
+import androidx.compose.ui.tooling.preview.Preview
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import tn.esprit.sansa.ui.theme.SansaTheme
+import tn.esprit.sansa.models.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddLightingProgramScreen(
+    onAddSuccess: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var priority by remember { mutableStateOf(5) }
+    var status by remember { mutableStateOf(ProgramStatus.ACTIVE) }
+
+    var rules by remember { mutableStateOf(mutableListOf<LightingRule>()) }
+
+    var isAddingRule by remember { mutableStateOf(false) }
+    var newRuleType by remember { mutableStateOf(LightingRuleType.TIME_BASED) }
+    var newRuleDesc by remember { mutableStateOf("") }
+    var newRuleParams by remember { mutableStateOf("") }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { AddProgramTopBarModern() },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { /* Défile vers le bas ou ouvre directement la section */ },
+                containerColor = NoorBlue,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Valider le programme", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            item { Spacer(Modifier.height(16.dp)) }
+
+            // Nom du programme
+            item {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nom du programme") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NoorBlue,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                        focusedLabelColor = NoorBlue
+                    )
+                )
+            }
+
+            // Description
+            item {
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NoorBlue,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                )
+            }
+
+            // Priorité
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(containerColor = NoorBlue.copy(alpha = 0.08f))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("Priorité", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = NoorBlue)
+                        Spacer(Modifier.height(12.dp))
+                        Slider(
+                            value = priority.toFloat(),
+                            onValueChange = { priority = it.toInt() },
+                            valueRange = 1f..10f,
+                            steps = 9,
+                            colors = SliderDefaults.colors(
+                                thumbColor = NoorBlue,
+                                activeTrackColor = NoorBlue
+                            )
+                        )
+                        Text(
+                            text = "$priority / 10",
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = NoorBlue
+                        )
+                    }
+                }
+            }
+
+            // Statut
+            item {
+                var expanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
+                    OutlinedTextField(
+                        readOnly = true,
+                        value = status.displayName,
+                        onValueChange = {},
+                        label = { Text("Statut du programme") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = status.color,
+                            focusedLabelColor = status.color
+                        ),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        ProgramStatus.entries.forEach { s ->
+                            DropdownMenuItem(
+                                text = { Text(s.displayName) },
+                                onClick = {
+                                    status = s
+                                    expanded = false
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = if (s == status) Color.White else MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.background(if (s == status) s.color else Color.Transparent)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Liste des règles ajoutées
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Règles (${rules.size})", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { isAddingRule = !isAddingRule }) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isAddingRule) "Annuler" else "Ajouter une règle")
+                    }
+                }
+            }
+
+            // Règles existantes
+            items(rules.size) { index ->
+                val rule = rules[index]
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = rule.type.color.copy(alpha = 0.1f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(rule.type.icon, contentDescription = null, tint = rule.type.color, modifier = Modifier.size(32.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(rule.type.displayName, fontWeight = FontWeight.SemiBold, color = rule.type.color)
+                            if (rule.description.isNotEmpty()) Text(rule.description, fontSize = 14.sp)
+                            Text(rule.parameters, fontSize = 13.sp, color = Color.DarkGray)
+                        }
+                        IconButton(onClick = { rules = rules.toMutableList().apply { removeAt(index) } }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Supprimer", tint = NoorRed)
+                        }
+                    }
+                }
+            }
+
+            // Section ajout de nouvelle règle (expansible)
+            item {
+                AnimatedVisibility(
+                    visible = isAddingRule,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(8.dp, RoundedCornerShape(28.dp)),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(containerColor = NoorGreen.copy(alpha = 0.08f))
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("Nouvelle règle", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = NoorGreen)
+
+                            Spacer(Modifier.height(16.dp))
+
+                            var typeExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = !typeExpanded }) {
+                                OutlinedTextField(
+                                    readOnly = true,
+                                    value = newRuleType.displayName,
+                                    onValueChange = {},
+                                    label = { Text("Type de règle") },
+                                    leadingIcon = { Icon(newRuleType.icon, contentDescription = null, tint = newRuleType.color) },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = newRuleType.color)
+                                )
+                                ExposedDropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
+                                    LightingRuleType.entries.forEach { type ->
+                                        DropdownMenuItem(
+                                            text = { Text(type.displayName) },
+                                            leadingIcon = { Icon(type.icon, contentDescription = null, tint = type.color) },
+                                            onClick = {
+                                                newRuleType = type
+                                                typeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            OutlinedTextField(
+                                value = newRuleDesc,
+                                onValueChange = { newRuleDesc = it },
+                                label = { Text("Description (facultatif)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = newRuleParams,
+                                onValueChange = { newRuleParams = it },
+                                label = { Text("Paramètres") },
+                                placeholder = { Text("ex: 18:00-06:00 | 100%") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = false,
+                                minLines = 2
+                            )
+
+                            Spacer(Modifier.height(20.dp))
+
+                            Button(
+                                onClick = {
+                                    if (newRuleParams.isNotBlank()) {
+                                        rules = rules.toMutableList().apply {
+                                            add(LightingRule(newRuleType, newRuleDesc, newRuleParams))
+                                        }
+                                        newRuleDesc = ""
+                                        newRuleParams = ""
+                                        isAddingRule = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = newRuleParams.isNotBlank(),
+                                colors = ButtonDefaults.buttonColors(containerColor = NoorGreen)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ajouter cette règle", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bouton de validation final (doublon du FAB pour accessibilité)
+            item {
+                Button(
+                    onClick = {
+                        // TODO: Sauvegarde réelle
+                        onAddSuccess()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = name.isNotBlank() && rules.isNotEmpty(),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NoorBlue)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Valider et créer le programme", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            item { Spacer(Modifier.height(100.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun AddProgramTopBarModern() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(NoorBlue.copy(alpha = 0.9f), NoorBlue.copy(alpha = 0.6f))
+                )
+            )
+            .padding(horizontal = 20.dp, vertical = 48.dp)
+    ) {
+        Column {
+            Text("Nouveau programme", color = Color.White.copy(0.9f), fontSize = 16.sp)
+            Text("Création intelligente", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black)
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun AddLightingProgramPreview() {
+    SansaTheme {
+        AddLightingProgramScreen()
+    }
+}
