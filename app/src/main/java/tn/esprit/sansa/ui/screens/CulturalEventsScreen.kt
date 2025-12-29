@@ -1,23 +1,25 @@
-// CulturalEventsScreen.kt — Interface des événements culturels avec design Noor
+// CulturalEventsScreen.kt — Version moderne alignée sur Technicians/Sensors/Interventions/Cameras/Citizens (Décembre 2025)
 package tn.esprit.sansa.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,9 +28,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,6 +39,10 @@ import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import tn.esprit.sansa.ui.components.CoachMarkTooltip
+import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.EmptyState
 
 // Palette Noor
 private val NoorBlue = Color(0xFF1E40AF)
@@ -117,12 +123,15 @@ fun CulturalEventsScreen(
     modifier: Modifier = Modifier,
     onNavigateToAddEvent: () -> Unit = {}
 ) {
+    val eventsList = remember { mutableStateListOf(*mockEvents.toTypedArray()) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<EventStatus?>(null) }
     var selectedAmbiance by remember { mutableStateOf<AmbianceType?>(null) }
 
-    val filteredEvents = remember(searchQuery, selectedStatus, selectedAmbiance) {
-        mockEvents.filter { event ->
+    val filteredEvents = remember(eventsList.size, searchQuery, selectedStatus, selectedAmbiance) {
+        eventsList.filter { event ->
             val matchesSearch = searchQuery.isEmpty() ||
                     event.id.contains(searchQuery, ignoreCase = true) ||
                     event.name.contains(searchQuery, ignoreCase = true) ||
@@ -133,11 +142,11 @@ fun CulturalEventsScreen(
         }.sortedBy { it.dateTime }
     }
 
-    val stats = remember(mockEvents) {
+    val stats = remember(eventsList.toList()) {
         mapOf(
-            "Total" to mockEvents.size,
-            "À venir" to mockEvents.count { it.status == EventStatus.UPCOMING },
-            "En cours" to mockEvents.count { it.status == EventStatus.ACTIVE }
+            "Total" to eventsList.size,
+            "À venir" to eventsList.count { it.status == EventStatus.UPCOMING },
+            "En cours" to eventsList.count { it.status == EventStatus.ACTIVE }
         )
     }
 
@@ -146,15 +155,13 @@ fun CulturalEventsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { CulturalEventsTopBarModern(stats = stats) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = onNavigateToAddEvent,
                 containerColor = NoorOrange,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Ajouter un événement")
-                Spacer(Modifier.width(8.dp))
-                Text("Nouvel événement", fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.Add, contentDescription = "Nouvel événement")
             }
         }
     ) { innerPadding ->
@@ -167,9 +174,7 @@ fun CulturalEventsScreen(
         ) {
             item { Spacer(Modifier.height(8.dp)) }
 
-            item {
-                EventSearchBar(query = searchQuery, onQueryChange = { searchQuery = it })
-            }
+            item { EventSearchBar(query = searchQuery, onQueryChange = { searchQuery = it }) }
 
             item {
                 Text(
@@ -208,8 +213,45 @@ fun CulturalEventsScreen(
                 )
             }
 
-            items(filteredEvents) { event ->
-                CulturalEventCard(event = event)
+            if (filteredEvents.isEmpty()) {
+                item {
+                    EmptyState(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                        icon = Icons.Default.EventBusy,
+                        title = "Aucun événement",
+                        description = "Il n'y a rien de prévu pour le moment.",
+                        actionLabel = "Créer un événement",
+                        onActionClick = onNavigateToAddEvent,
+                        iconColor = NoorOrange
+                    )
+                }
+            } else {
+                itemsIndexed(
+                    items = filteredEvents,
+                    key = { _, event -> event.id }
+                ) { index, event ->
+                    Box {
+                        SwipeToDeleteContainer(
+                            item = event,
+                            onDelete = { eventsList.remove(event) }
+                        ) { item ->
+                            CulturalEventCard(event = item)
+                        }
+
+                        if (index == 0 && showTutorial) {
+                            CoachMarkTooltip(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 16.dp)
+                                    .offset(x = 16.dp, y = 32.dp),
+                                text = "Glissez vers la gauche pour supprimer",
+                                onDismiss = { showTutorial = false }
+                            )
+                        }
+                    }
+                }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
@@ -225,10 +267,10 @@ private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
             .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
+                    colors = listOf(NoorOrange.copy(alpha = 0.95f), NoorOrange.copy(alpha = 0.65f))
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 28.dp)  // ← Réduit de 48 → 28 dp
+            .padding(horizontal = 20.dp, vertical = 28.dp)
     ) {
         Column {
             Row(
@@ -245,9 +287,9 @@ private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Programmation artistique",
+                        "Ambiances illuminées",
                         color = Color.White,
-                        fontSize = 26.sp,                    // ← réduit de 32 → 26
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.6).sp
                     )
@@ -262,7 +304,7 @@ private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
                 }
             }
 
-            Spacer(Modifier.height(24.dp))  // ← réduit de 32 → 24 dp
+            Spacer(Modifier.height(24.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -280,7 +322,6 @@ private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
     }
 }
 
-// Carte de statistiques compacte (même version utilisée partout)
 @Composable
 private fun QuickStatCardCompact(
     value: String,
@@ -301,7 +342,7 @@ private fun QuickStatCardCompact(
             Text(
                 text = value,
                 color = Color.White,
-                fontSize = 24.sp,                           // ← réduit de 28 → 24
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.8).sp
             )
@@ -312,23 +353,6 @@ private fun QuickStatCardCompact(
                 fontSize = 11.sp,
                 letterSpacing = 0.3.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun QuickStatCard(value: String, label: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = value, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-            Text(text = label, color = Color.White.copy(0.9f), fontSize = 12.sp)
         }
     }
 }
@@ -421,109 +445,177 @@ private fun CulturalEventCard(event: CulturalEvent) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (pressed) 16.dp else 8.dp)
-    val offsetY by animateDpAsState(if (pressed) (-6).dp else 0.dp)
+
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 4.dp else 1.dp,
+        animationSpec = tween(200)
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = tween(200)
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = offsetY)
-            .shadow(elevation, RoundedCornerShape(28.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { expanded = !expanded },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(event.status.color.copy(0.1f), MaterialTheme.colorScheme.surface)
-                    )
-                )
-                .padding(20.dp)
+                .clickable(interactionSource = interactionSource, indication = null) {
+                    expanded = !expanded
+                }
+                .padding(18.dp)
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(event.ambianceType.color.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(event.ambianceType.color.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            event.ambianceType.icon,
-                            contentDescription = null,
-                            tint = event.ambianceType.color,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(event.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Badge(containerColor = event.status.color) {
-                                Text(event.status.displayName, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Badge(containerColor = event.ambianceType.color.copy(alpha = 0.2f)) {
-                                Text(event.ambianceType.displayName, fontSize = 10.sp, color = event.ambianceType.color, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            event.id,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StatItem(
-                        value = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(event.dateTime),
-                        label = "Date",
-                        modifier = Modifier.weight(1f)
+                    Icon(
+                        event.ambianceType.icon,
+                        contentDescription = null,
+                        tint = event.ambianceType.color,
+                        modifier = Modifier.size(28.dp)
                     )
-                    StatItem(value = "${event.duration}h", label = "Durée", modifier = Modifier.weight(1f))
-                    StatItem(value = event.attendees.toString(), label = "Participants", modifier = Modifier.weight(1f))
                 }
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                        InfoRow(icon = Icons.Default.Description, label = "Description", value = event.description)
-                        Spacer(Modifier.height(12.dp))
-                        InfoRow(icon = Icons.Default.Business, label = "Organisateur", value = event.organizer)
-                        Spacer(Modifier.height(12.dp))
-                        InfoRow(icon = Icons.Default.LocationOn, label = "Zones", value = event.zones.joinToString(", "))
-                        Spacer(Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { /* TODO */ }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Edit, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Modifier")
-                            }
-                            Button(
-                                onClick = { /* TODO */ },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = event.ambianceType.color)
-                            ) {
-                                Icon(Icons.Default.Lightbulb, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Configurer")
-                            }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = event.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Badge(
+                            containerColor = event.status.color,
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = event.status.displayName,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+
+                        Badge(
+                            containerColor = event.ambianceType.color.copy(alpha = 0.15f),
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = event.ambianceType.displayName,
+                                fontSize = 11.sp,
+                                color = event.ambianceType.color,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ModernStatItem(
+                    value = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()).format(event.dateTime),
+                    label = "Date",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = "${event.duration}h",
+                    label = "Durée",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = event.attendees.toString(),
+                    label = "Participants",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+
+                    InfoRow(
+                        icon = Icons.Default.Description,
+                        label = "Description",
+                        value = event.description
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.Business,
+                        label = "Organisateur",
+                        value = event.organizer
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.LocationOn,
+                        label = "Zones",
+                        value = event.zones.joinToString(", ")
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Modifier", fontSize = 13.sp)
+                        }
+                        Button(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = event.ambianceType.color)
+                        ) {
+                            Icon(Icons.Default.Lightbulb, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Configurer", fontSize = 13.sp)
                         }
                     }
                 }
@@ -533,10 +625,33 @@ private fun CulturalEventCard(event: CulturalEvent) {
 }
 
 @Composable
-private fun StatItem(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+private fun ModernStatItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

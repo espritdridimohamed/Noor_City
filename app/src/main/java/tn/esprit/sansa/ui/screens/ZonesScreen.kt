@@ -1,21 +1,24 @@
-// ZonesScreen.kt – Interface des zones avec design Noor et navigation
+// ZonesScreen.kt – Interface des zones avec design moderne aligné (Décembre 2025)
 package tn.esprit.sansa.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,14 +28,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import tn.esprit.sansa.ui.components.CoachMarkTooltip
+import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.EmptyState
 
 // Palette Noor
 private val NoorBlue = Color(0xFF1E40AF)
@@ -44,7 +52,7 @@ private val NoorCyan = Color(0xFF06B6D4)
 private val NoorIndigo = Color(0xFF6366F1)
 private val NoorEmerald = Color(0xFF10B981)
 
-enum class ZoneType(val displayName: String, val color: Color, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+enum class ZoneType(val displayName: String, val color: Color, val icon: ImageVector) {
     RESIDENTIAL("Résidentielle", NoorBlue, Icons.Default.Home),
     COMMERCIAL("Commerciale", NoorPurple, Icons.Default.Business),
     INDUSTRIAL("Industrielle", NoorCyan, Icons.Default.Factory),
@@ -119,28 +127,17 @@ private val mockZones = listOf(
 fun ZonesScreen(
     modifier: Modifier = Modifier
 ) {
-    // État pour gérer la navigation entre les écrans
     var showAddZone by remember { mutableStateOf(false) }
 
     if (showAddZone) {
-        // Afficher l'écran d'ajout de zone
         AddZoneScreen(
-            onAddSuccess = {
-                // Retour à l'écran principal après l'ajout
-                showAddZone = false
-            },
-            onBackPressed = {
-                // Retour à l'écran principal si l'utilisateur annule
-                showAddZone = false
-            }
+            onAddSuccess = { showAddZone = false },
+            onBackPressed = { showAddZone = false }
         )
     } else {
-        // Afficher l'écran principal des zones
         ZonesMainScreen(
             modifier = modifier,
-            onNavigateToAddZone = {
-                showAddZone = true
-            }
+            onNavigateToAddZone = { showAddZone = true }
         )
     }
 }
@@ -151,42 +148,40 @@ private fun ZonesMainScreen(
     modifier: Modifier = Modifier,
     onNavigateToAddZone: () -> Unit
 ) {
+    val zonesList = remember { mutableStateListOf(*mockZones.toTypedArray()) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf<ZoneType?>(null) }
     var selectedStatus by remember { mutableStateOf<ZoneStatus?>(null) }
 
-    val filteredZones = remember(searchQuery, selectedType, selectedStatus) {
-        mockZones.filter { zone ->
+    val filteredZones = remember(zonesList.size, searchQuery, selectedType, selectedStatus) {
+        zonesList.filter { zone ->
             val matchesSearch = searchQuery.isEmpty() ||
                     zone.id.contains(searchQuery, ignoreCase = true) ||
                     zone.name.contains(searchQuery, ignoreCase = true) ||
-                    zone.description.contains(searchQuery, ignoreCase = true) ||
-                    zone.coordinator.contains(searchQuery, ignoreCase = true)
+                    zone.description.contains(searchQuery, ignoreCase = true)
             val matchesType = selectedType == null || zone.type == selectedType
             val matchesStatus = selectedStatus == null || zone.status == selectedStatus
             matchesSearch && matchesType && matchesStatus
         }.sortedBy { it.name }
     }
 
-    val stats = remember(mockZones) {
+    val stats = remember(zonesList.toList()) {
         mapOf(
-            "Total" to mockZones.size,
-            "Actives" to mockZones.count { it.status == ZoneStatus.ACTIVE },
-            "Lampadaires" to mockZones.sumOf { it.associatedStreetlights.size }
+            "Total" to zonesList.size,
+            "Actives" to zonesList.count { it.status == ZoneStatus.ACTIVE },
+            "En maintenance" to zonesList.count { it.status == ZoneStatus.MAINTENANCE }
         )
-    }
-
-    val totalPopulation = remember(mockZones) {
-        mockZones.sumOf { it.population }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { ZonesTopBar(stats = stats, totalPopulation = totalPopulation) },
+        topBar = { ZonesTopBarModern(stats = stats) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAddZone,
-                containerColor = NoorIndigo,
+                containerColor = NoorBlue,
                 contentColor = Color.White
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Nouvelle zone")
@@ -205,18 +200,28 @@ private fun ZonesMainScreen(
             item { ZoneSearchBar(query = searchQuery, onQueryChange = { searchQuery = it }) }
 
             item {
-                Text("Filtrer par type", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    "Filtrer par type",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 Spacer(Modifier.height(12.dp))
-                TypeFilters(
+                ZoneTypeFilters(
                     selectedType = selectedType,
                     onTypeSelected = { selectedType = if (selectedType == it) null else it }
                 )
             }
 
             item {
-                Text("Filtrer par statut", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    "Filtrer par statut",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 Spacer(Modifier.height(12.dp))
-                StatusFilters(
+                ZoneStatusFilters(
                     selectedStatus = selectedStatus,
                     onStatusSelected = { selectedStatus = if (selectedStatus == it) null else it }
                 )
@@ -224,15 +229,52 @@ private fun ZonesMainScreen(
 
             item {
                 Text(
-                    text = "${filteredZones.size} zone${if (filteredZones.size != 1) "s" else ""} trouvée${if (filteredZones.size != 1) "s" else ""}",
+                    "${filteredZones.size} zone${if (filteredZones.size != 1) "s" else ""} trouvé${if (filteredZones.size != 1) "es" else "e"}",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
-            items(filteredZones) { zone ->
-                ZoneCard(zone = zone)
+            if (filteredZones.isEmpty()) {
+                item {
+                    EmptyState(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                        icon = Icons.Default.LocationCity,
+                        title = "Aucune zone trouvée",
+                        description = "Vérifiez vos filtres ou ajoutez une nouvelle zone.",
+                        actionLabel = "Nouvelle zone",
+                        onActionClick = onNavigateToAddZone,
+                        iconColor = NoorIndigo
+                    )
+                }
+            } else {
+                itemsIndexed(
+                    items = filteredZones,
+                    key = { _, zone -> zone.id }
+                ) { index, zone ->
+                    Box {
+                        SwipeToDeleteContainer(
+                            item = zone,
+                            onDelete = { zonesList.remove(zone) }
+                        ) { item ->
+                            ZoneCard(zone = item)
+                        }
+
+                        if (index == 0 && showTutorial) {
+                            CoachMarkTooltip(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 16.dp)
+                                    .offset(x = 16.dp, y = 32.dp),
+                                text = "Glissez vers la gauche pour supprimer",
+                                onDismiss = { showTutorial = false }
+                            )
+                        }
+                    }
+                }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
@@ -241,7 +283,7 @@ private fun ZonesMainScreen(
 }
 
 @Composable
-private fun ZonesTopBar(stats: Map<String, Int>, totalPopulation: Int) {
+private fun ZonesTopBarModern(stats: Map<String, Int>) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,7 +293,7 @@ private fun ZonesTopBar(stats: Map<String, Int>, totalPopulation: Int) {
                     colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 28.dp)  // ← Réduit de 48 → 28 dp
+            .padding(horizontal = 20.dp, vertical = 28.dp)
     ) {
         Column {
             Row(
@@ -261,16 +303,16 @@ private fun ZonesTopBar(stats: Map<String, Int>, totalPopulation: Int) {
             ) {
                 Column {
                     Text(
-                        "Zones de gestion",
+                        "Gestion des zones",
                         color = Color.White.copy(alpha = 0.85f),
                         fontSize = 14.sp,
                         letterSpacing = 0.4.sp
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Division urbaine",
+                        "Organisation territoriale",
                         color = Color.White,
-                        fontSize = 26.sp,                    // ← Réduit de 32 → 26
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.6).sp
                     )
@@ -285,7 +327,7 @@ private fun ZonesTopBar(stats: Map<String, Int>, totalPopulation: Int) {
                 }
             }
 
-            Spacer(Modifier.height(24.dp))  // ← Réduit de 32 → 24
+            Spacer(Modifier.height(24.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -298,17 +340,11 @@ private fun ZonesTopBar(stats: Map<String, Int>, totalPopulation: Int) {
                         modifier = Modifier.weight(1f)
                     )
                 }
-                QuickStatCardCompact(
-                    value = String.format("%,d", totalPopulation),
-                    label = "Population",
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }
 }
 
-// Carte de stats compacte
 @Composable
 private fun QuickStatCardCompact(
     value: String,
@@ -345,28 +381,11 @@ private fun QuickStatCardCompact(
 }
 
 @Composable
-private fun QuickStatCard(value: String, label: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = value, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-            Text(text = label, color = Color.White.copy(0.9f), fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
 private fun ZoneSearchBar(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Rechercher par nom, ID, coordinateur...") },
+        placeholder = { Text("Rechercher par ID, nom ou description...") },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -379,17 +398,17 @@ private fun ZoneSearchBar(query: String, onQueryChange: (String) -> Unit) {
         shape = RoundedCornerShape(24.dp),
         singleLine = true,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = NoorIndigo,
+            focusedBorderColor = NoorBlue,
             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            cursorColor = NoorIndigo
+            cursorColor = NoorBlue
         )
     )
 }
 
 @Composable
-private fun TypeFilters(
+private fun ZoneTypeFilters(
     selectedType: ZoneType?,
     onTypeSelected: (ZoneType) -> Unit
 ) {
@@ -418,7 +437,7 @@ private fun TypeFilters(
 }
 
 @Composable
-private fun StatusFilters(
+private fun ZoneStatusFilters(
     selectedStatus: ZoneStatus?,
     onStatusSelected: (ZoneStatus) -> Unit
 ) {
@@ -451,194 +470,194 @@ private fun ZoneCard(zone: Zone) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (pressed) 16.dp else 8.dp)
-    val offsetY by animateDpAsState(if (pressed) (-6).dp else 0.dp)
 
-    val coveragePercentage = if (zone.associatedStreetlights.isNotEmpty())
-        (zone.activeStreetlights.toFloat() / zone.associatedStreetlights.size * 100).toInt()
-    else 0
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 4.dp else 1.dp,
+        animationSpec = tween(200)
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = tween(200)
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = offsetY)
-            .shadow(elevation, RoundedCornerShape(28.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { expanded = !expanded },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(zone.type.color.copy(0.1f), MaterialTheme.colorScheme.surface)
-                    )
-                )
-                .padding(20.dp)
+                .clickable(interactionSource = interactionSource, indication = null) {
+                    expanded = !expanded
+                }
+                .padding(18.dp)
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(zone.type.color.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(zone.type.color.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            zone.type.icon,
-                            contentDescription = null,
-                            tint = zone.type.color,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(zone.id, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.width(8.dp))
-                            Badge(containerColor = zone.status.color) {
-                                Text(zone.status.displayName, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            zone.name,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.9f),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Badge(containerColor = zone.type.color.copy(alpha = 0.2f)) {
-                            Text(zone.type.displayName, fontSize = 11.sp, color = zone.type.color, fontWeight = FontWeight.Medium)
-                        }
-                    }
+                    Icon(
+                        zone.type.icon,
+                        contentDescription = null,
+                        tint = zone.type.color,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = zone.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-                Text(
-                    zone.description,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                    fontSize = 13.sp,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2
-                )
+                    Spacer(Modifier.height(6.dp))
 
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = NoorBlue.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = NoorBlue, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.height(4.dp))
-                            Text("${zone.associatedStreetlights.size}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NoorBlue)
-                            Text("Lampadaires", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = NoorGreen.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = NoorGreen, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.height(4.dp))
-                            Text("$coveragePercentage%", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NoorGreen)
-                            Text("Actifs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = NoorPurple.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.SquareFoot, contentDescription = null, tint = NoorPurple, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.height(4.dp))
-                            Text("${zone.area}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = NoorPurple)
-                            Text("km²", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-                        }
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-                        ZoneInfoRow(
-                            icon = Icons.Default.Person,
-                            label = "Coordinateur",
-                            value = zone.coordinator
-                        )
-
-                        if (zone.population > 0) {
-                            Spacer(Modifier.height(12.dp))
-                            ZoneInfoRow(
-                                icon = Icons.Default.Groups,
-                                label = "Population",
-                                value = String.format(java.util.Locale.US, "%,d", zone.population) + " habitants"
+                        Badge(
+                            containerColor = zone.status.color,
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = zone.status.displayName,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
                             )
                         }
 
-                        Spacer(Modifier.height(16.dp))
-
-                        Text("Lampadaires associés (${zone.associatedStreetlights.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        Spacer(Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Badge(
+                            containerColor = zone.type.color.copy(alpha = 0.15f),
+                            modifier = Modifier.height(22.dp)
                         ) {
-                            zone.associatedStreetlights.forEach { streetlight ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = { Text(streetlight, fontSize = 12.sp) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = zone.type.color.copy(alpha = 0.1f),
-                                        labelColor = zone.type.color
-                                    )
-                                )
-                            }
+                            Text(
+                                text = zone.type.displayName,
+                                fontSize = 11.sp,
+                                color = zone.type.color,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
+                    }
+                }
 
-                        Spacer(Modifier.height(16.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { /* TODO */ }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Edit, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Modifier")
-                            }
-                            Button(
+            Spacer(Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ModernStatItem(
+                    value = "${zone.associatedStreetlights.size}",
+                    label = "Lampadaires",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = "${zone.activeStreetlights}",
+                    label = "Actifs",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = "${zone.area} km²",
+                    label = "Superficie",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+
+                    InfoRow(
+                        icon = Icons.Default.Description,
+                        label = "Description",
+                        value = zone.description
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.Person,
+                        label = "Coordinateur",
+                        value = zone.coordinator
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.Groups,
+                        label = "Population",
+                        value = "${zone.population}"
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Text("Lampadaires associés", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        zone.associatedStreetlights.forEach { light ->
+                            AssistChip(
                                 onClick = { /* TODO */ },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = zone.type.color)
-                            ) {
-                                Icon(Icons.Default.Visibility, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Détails")
-                            }
+                                label = { Text(light, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Modifier", fontSize = 13.sp)
+                        }
+                        Button(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = zone.type.color)
+                        ) {
+                            Icon(Icons.Default.Visibility, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Détails", fontSize = 13.sp)
                         }
                     }
                 }
@@ -648,8 +667,39 @@ private fun ZoneCard(zone: Zone) {
 }
 
 @Composable
-private fun ZoneInfoRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun ModernStatItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun InfoRow(
+    icon: ImageVector,
     label: String,
     value: String
 ) {

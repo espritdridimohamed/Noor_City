@@ -4,18 +4,21 @@ package tn.esprit.sansa.ui.screens
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,12 +32,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import tn.esprit.sansa.ui.components.CoachMarkTooltip
+import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.EmptyState
 
 // Palette Noor commune
 private val NoorBlue = Color(0xFF1E40AF)
@@ -93,12 +101,15 @@ fun SensorsScreenModern(
     modifier: Modifier = Modifier,
     onNavigateToAddSensor: () -> Unit = {}
 ) {
+    val sensorsList = remember { mutableStateListOf(*mockSensors.toTypedArray()) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<SensorStatus?>(null) }
     var selectedType by remember { mutableStateOf<SensorType?>(null) }
 
-    val filteredSensors = remember(searchQuery, selectedStatus, selectedType) {
-        mockSensors.filter { sensor ->
+    val filteredSensors = remember(sensorsList.size, searchQuery, selectedStatus, selectedType) {
+        sensorsList.filter { sensor ->
             val matchesSearch = searchQuery.isEmpty() ||
                     sensor.id.contains(searchQuery, ignoreCase = true) ||
                     sensor.streetlightName.contains(searchQuery, ignoreCase = true) ||
@@ -109,11 +120,11 @@ fun SensorsScreenModern(
         }.sortedBy { it.streetlightName }
     }
 
-    val stats = remember(mockSensors) {
+    val stats = remember(sensorsList.toList()) {
         mapOf(
-            "Total" to mockSensors.size,
-            "Actifs" to mockSensors.count { it.status == SensorStatus.ACTIVE },
-            "En alerte" to mockSensors.count { it.status != SensorStatus.ACTIVE }
+            "Total" to sensorsList.size,
+            "Actifs" to sensorsList.count { it.status == SensorStatus.ACTIVE },
+            "En alerte" to sensorsList.count { it.status != SensorStatus.ACTIVE }
         )
     }
 
@@ -121,14 +132,12 @@ fun SensorsScreenModern(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { SensorsTopBarModern(stats = stats) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = onNavigateToAddSensor,
                 containerColor = NoorBlue,
                 contentColor = Color.White
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Nouveau capteur", fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.Add, contentDescription = "Nouveau capteur")
             }
         }
     ) { innerPadding ->
@@ -180,10 +189,46 @@ fun SensorsScreenModern(
                 )
             }
 
-            items(filteredSensors) { sensor: Sensor ->
-                SensorCard(sensor = sensor)
-            }
+            if (filteredSensors.isEmpty()) {
+                item {
+                    EmptyState(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                        icon = Icons.Default.SensorsOff,
+                        title = "Aucun capteur trouvé",
+                        description = "Vérifiez vos filtres ou ajoutez un nouveau capteur.",
+                        actionLabel = "Nouveau capteur",
+                        onActionClick = onNavigateToAddSensor,
+                        iconColor = NoorPurple
+                    )
+                }
+            } else {
+                itemsIndexed(
+                    items = filteredSensors,
+                    key = { _, sensor -> sensor.id }
+                ) { index, sensor ->
+                    Box {
+                        SwipeToDeleteContainer(
+                            item = sensor,
+                            onDelete = { sensorsList.remove(sensor) }
+                        ) { item ->
+                            SensorCard(sensor = item)
+                        }
 
+                        if (index == 0 && showTutorial) {
+                            CoachMarkTooltip(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 16.dp)
+                                    .offset(x = 16.dp, y = 32.dp),
+                                text = "Glissez vers la gauche pour supprimer",
+                                onDismiss = { showTutorial = false }
+                            )
+                        }
+                    }
+                }
+            }
             item { Spacer(Modifier.height(100.dp)) }
         }
     }
@@ -200,7 +245,7 @@ private fun SensorsTopBarModern(stats: Map<String, Int>) {
                     colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 28.dp) // ← Réduit de 48dp → 28dp
+            .padding(horizontal = 20.dp, vertical = 28.dp)
     ) {
         Column {
             Row(
@@ -212,16 +257,16 @@ private fun SensorsTopBarModern(stats: Map<String, Int>) {
                     Text(
                         "Réseau de capteurs",
                         color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 14.sp,                    // ← réduit
+                        fontSize = 14.sp,
                         letterSpacing = 0.5.sp
                     )
-                    Spacer(Modifier.height(4.dp))             // ← espacement plus naturel
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         "Surveillance intelligente",
                         color = Color.White,
-                        fontSize = 26.sp,                    // ← réduit de 32 → 26
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = (-0.5).sp            // ← léger compactage du titre
+                        letterSpacing = (-0.5).sp
                     )
                 }
                 IconButton(onClick = { /* TODO: Refresh */ }) {
@@ -229,12 +274,12 @@ private fun SensorsTopBarModern(stats: Map<String, Int>) {
                         Icons.Default.Refresh,
                         contentDescription = "Actualiser",
                         tint = Color.White,
-                        modifier = Modifier.size(28.dp)      // ← un peu plus petit
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
 
-            Spacer(Modifier.height(24.dp))                    // ← réduit de 32 → 24
+            Spacer(Modifier.height(24.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -260,19 +305,19 @@ private fun QuickStatCardCompact(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),              // ← coins un peu plus doux
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White.copy(alpha = 0.22f)
         )
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp), // ← padding réduit
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
                 color = Color.White,
-                fontSize = 24.sp,                           // ← réduit de 28 → 24
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.8).sp
             )
@@ -280,26 +325,9 @@ private fun QuickStatCardCompact(
             Text(
                 text = label,
                 color = Color.White.copy(alpha = 0.9f),
-                fontSize = 11.sp,                           // ← un peu plus petit
+                fontSize = 11.sp,
                 letterSpacing = 0.3.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun QuickStatCard(value: String, label: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = value, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-            Text(text = label, color = Color.White.copy(0.9f), fontSize = 12.sp)
         }
     }
 }
@@ -309,6 +337,7 @@ private fun SensorSearchBar(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
+        enabled = true,
         placeholder = { Text("Rechercher par ID, lampadaire ou type...") },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         trailingIcon = {
@@ -343,9 +372,9 @@ private fun StatusFilters(
         SensorStatus.entries.forEach { status ->
             val isSelected = selectedStatus == status
             FilterChip(
+                selected = isSelected,
                 onClick = { onStatusSelected(status) },
                 label = { Text(status.displayName) },
-                selected = isSelected,
                 leadingIcon = if (isSelected) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 } else null,
@@ -372,9 +401,9 @@ private fun TypeFilters(
         SensorType.entries.forEach { type ->
             val isSelected = selectedType == type
             FilterChip(
+                selected = isSelected,
                 onClick = { onTypeSelected(type) },
                 label = { Text(type.displayName) },
-                selected = isSelected,
                 leadingIcon = {
                     Icon(type.icon, contentDescription = null, modifier = Modifier.size(18.dp))
                 },
@@ -394,140 +423,179 @@ private fun SensorCard(sensor: Sensor) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (pressed) 16.dp else 8.dp)
-    val offsetY by animateDpAsState(if (pressed) (-6).dp else 0.dp)
+
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 4.dp else 1.dp,
+        animationSpec = tween(200)
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = tween(200)
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = offsetY)
-            .shadow(elevation, RoundedCornerShape(28.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { expanded = !expanded },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(sensor.status.color.copy(0.1f), MaterialTheme.colorScheme.surface)
-                    )
-                )
-                .padding(20.dp)
+                .clickable(interactionSource = interactionSource, indication = null) {
+                    expanded = !expanded
+                }
+                .padding(18.dp)
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(sensor.type.color.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(sensor.type.color.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                    Icon(
+                        sensor.type.icon,
+                        contentDescription = null,
+                        tint = sensor.type.color,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = sensor.type.displayName,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            sensor.type.icon,
-                            contentDescription = null,
-                            tint = sensor.type.color,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
+                        Badge(
+                            containerColor = sensor.status.color,
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = sensor.status.displayName,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(sensor.type.displayName, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Badge(
+                            containerColor = sensor.type.color.copy(alpha = 0.15f),
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = sensor.type.displayName,
+                                fontSize = 11.sp,
+                                color = sensor.type.color,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Badge(containerColor = sensor.status.color) {
-                                Text(sensor.status.displayName, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Badge(containerColor = sensor.type.color.copy(alpha = 0.2f)) {
-                                Text(sensor.type.displayName, fontSize = 10.sp, color = sensor.type.color, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            sensor.id,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                            fontSize = 13.sp
-                        )
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StatItem(
-                        value = "${sensor.currentValue} ${sensor.type.unit}",
-                        label = "Valeur actuelle",
-                        modifier = Modifier.weight(1f)
+            Spacer(Modifier.height(14.dp))
+
+            // Stats principales
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ModernStatItem(
+                    value = "${sensor.currentValue} ${sensor.type.unit}",
+                    label = "Valeur",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = "${sensor.batteryLevel}%",
+                    label = "Batterie",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = sensor.lastUpdate,
+                    label = "Dern. MAJ",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
-                    StatItem(
-                        value = "${sensor.batteryLevel}%",
-                        label = "Batterie",
-                        modifier = Modifier.weight(1f)
+
+                    InfoRow(
+                        icon = Icons.Default.Lightbulb,
+                        label = "Lampadaire",
+                        value = sensor.streetlightName
                     )
-                    StatItem(
-                        value = sensor.lastUpdate,
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.ConfirmationNumber,
+                        label = "Identifiant",
+                        value = sensor.id
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.Update,
                         label = "Dernière mise à jour",
-                        modifier = Modifier.weight(1f)
+                        value = sensor.lastUpdate
                     )
-                }
 
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                        InfoRow(
-                            icon = Icons.Default.LocationOn,
-                            label = "Lampadaire",
-                            value = sensor.streetlightName
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        InfoRow(
-                            icon = Icons.Default.PowerSettingsNew,
-                            label = "Statut",
-                            value = sensor.status.displayName
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        InfoRow(
-                            icon = Icons.Default.Update,
-                            label = "Dernière mise à jour",
-                            value = sensor.lastUpdate
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { /* TODO */ }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Edit, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Calibrer")
-                            }
-                            Button(
-                                onClick = { /* TODO */ },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = NoorBlue)
-                            ) {
-                                Icon(Icons.Default.BarChart, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Historique")
-                            }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Calibrer", fontSize = 13.sp)
+                        }
+                        Button(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = NoorBlue)
+                        ) {
+                            Icon(Icons.Default.BarChart, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Historique", fontSize = 13.sp)
                         }
                     }
                 }
@@ -537,10 +605,33 @@ private fun SensorCard(sensor: Sensor) {
 }
 
 @Composable
-private fun StatItem(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+private fun ModernStatItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

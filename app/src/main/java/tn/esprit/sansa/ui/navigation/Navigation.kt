@@ -59,6 +59,8 @@ sealed class Screen(
     object Home    : Screen("home", "Accueil", Icons.Default.Home)
     object History : Screen("history", "Historique", Icons.Default.History)
     object Settings: Screen("settings", "Paramètres", Icons.Default.Settings)
+    object ProfileTechnician : Screen("profile_technician", "Profil Technicien", Icons.Default.Person)
+    object ProfileCitizen : Screen("profile_citizen", "Profil Citoyen", Icons.Default.Person)
 }
 
 @Composable
@@ -256,8 +258,16 @@ fun AppNavigationWithModernBar(
                 )
             }
 
-            composable(Screen.Technicians.route) { TechniciansScreen() }
-            composable(Screen.Citizens.route) { CitizensScreen() }
+            composable(Screen.Technicians.route) {
+                TechniciansScreen(
+                    onNavigateToProfile = { navController.navigate(Screen.ProfileTechnician.route) }
+                )
+            }
+            composable(Screen.Citizens.route) {
+                CitizensScreen(
+                    onNavigateToProfile = { navController.navigate(Screen.ProfileCitizen.route) }
+                )
+            }
             composable(Screen.Reclamations.route) { ReclamationsScreen() }
 
             composable(Screen.Zones.route) { ZonesScreen() }
@@ -272,7 +282,13 @@ fun AppNavigationWithModernBar(
                 )
             }
 
-            composable(Screen.Sensors.route) { SensorsScreenModern() }
+            composable(Screen.Sensors.route) {
+                SensorsScreenModern(
+                    onNavigateToAddSensor = {
+                        navController.navigate(Screen.AddSensor.route)
+                    }
+                )
+            }
 
             composable(Screen.AddCamera.route) {
                 AddCameraScreen(
@@ -316,6 +332,12 @@ fun AppNavigationWithModernBar(
             composable(Screen.Home.route) { HomeScreenModern() }
             composable(Screen.History.route) { HistoryScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
+            composable(Screen.ProfileTechnician.route) {
+                ProfileScreen(isTechnician = true, onLogOut = { navController.popBackStack() })
+            }
+            composable(Screen.ProfileCitizen.route) {
+                ProfileScreen(isTechnician = false, onLogOut = { navController.popBackStack() })
+            }
         }
     }
 }

@@ -1,23 +1,25 @@
-// CamerasScreen.kt — Version corrigée et complète (compile sans erreur)
+// CamerasScreen.kt — Version moderne alignée + corrections complètes (Décembre 2025)
 package tn.esprit.sansa.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -26,16 +28,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
-import tn.esprit.sansa.models.* // Import des modèles et couleurs Noor
+import tn.esprit.sansa.ui.components.CoachMarkTooltip
+import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.models.*
+import androidx.compose.runtime.saveable.rememberSaveable
+
+private val NoorBlue = Color(0xFF1E40AF)
+private val NoorCyan = Color(0xFF06B6D4)
 
 private val mockCameras = listOf(
     Camera(
@@ -88,12 +97,15 @@ fun CamerasScreen(
     modifier: Modifier = Modifier,
     onNavigateToAddCamera: () -> Unit = {}
 ) {
+    val camerasList = remember { mutableStateListOf(*mockCameras.toTypedArray()) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<CameraStatus?>(null) }
     var selectedType by remember { mutableStateOf<CameraType?>(null) }
 
-    val filteredCameras = remember(searchQuery, selectedStatus, selectedType) {
-        mockCameras.filter { camera ->
+    val filteredCameras = remember(camerasList.size, searchQuery, selectedStatus, selectedType) {
+        camerasList.filter { camera ->
             val matchesSearch = searchQuery.isEmpty() ||
                     camera.id.contains(searchQuery, ignoreCase = true) ||
                     camera.location.contains(searchQuery, ignoreCase = true) ||
@@ -104,11 +116,11 @@ fun CamerasScreen(
         }.sortedBy { it.location }
     }
 
-    val stats = remember(mockCameras) {
+    val stats = remember(camerasList.toList()) {
         mapOf(
-            "Total" to mockCameras.size,
-            "En ligne" to mockCameras.count { it.status == CameraStatus.ONLINE || it.status == CameraStatus.RECORDING },
-            "Hors service" to mockCameras.count { it.status == CameraStatus.OFFLINE || it.status == CameraStatus.ERROR }
+            "Total" to camerasList.size,
+            "En ligne" to camerasList.count { it.status == CameraStatus.ONLINE || it.status == CameraStatus.RECORDING },
+            "Hors service" to camerasList.count { it.status == CameraStatus.OFFLINE || it.status == CameraStatus.ERROR }
         )
     }
 
@@ -121,10 +133,7 @@ fun CamerasScreen(
                 containerColor = NoorBlue,
                 contentColor = Color.White
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Ajouter une nouvelle caméra"
-                )
+                Icon(Icons.Default.Add, contentDescription = "Ajouter une nouvelle caméra")
             }
         }
     ) { innerPadding ->
@@ -140,7 +149,12 @@ fun CamerasScreen(
             item { CameraSearchBar(query = searchQuery, onQueryChange = { searchQuery = it }) }
 
             item {
-                Text("Filtrer par statut", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    "Filtrer par statut",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 Spacer(Modifier.height(12.dp))
                 CameraStatusFilters(
                     selectedStatus = selectedStatus,
@@ -149,7 +163,12 @@ fun CamerasScreen(
             }
 
             item {
-                Text("Filtrer par type de caméra", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    "Filtrer par type de caméra",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
                 Spacer(Modifier.height(12.dp))
                 CameraTypeFilters(
                     selectedType = selectedType,
@@ -166,8 +185,45 @@ fun CamerasScreen(
                 )
             }
 
-            items(filteredCameras) { camera ->
-                CameraCard(camera = camera)
+            if (filteredCameras.isEmpty()) {
+                item {
+                    EmptyState(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                        icon = Icons.Default.VideocamOff,
+                        title = "Aucune caméra",
+                        description = "Vérifiez vos critères de recherche ou ajoutez-en une.",
+                        actionLabel = "Ajouter une caméra",
+                        onActionClick = onNavigateToAddCamera,
+                        iconColor = NoorBlue
+                    )
+                }
+            } else {
+                itemsIndexed(
+                    items = filteredCameras,
+                    key = { _, camera -> camera.id }
+                ) { index, camera ->
+                    Box {
+                        SwipeToDeleteContainer(
+                            item = camera,
+                            onDelete = { camerasList.remove(camera) }
+                        ) { item ->
+                            CameraCard(camera = item)
+                        }
+
+                        if (index == 0 && showTutorial) {
+                            CoachMarkTooltip(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 16.dp)
+                                    .offset(x = 16.dp, y = 32.dp),
+                                text = "Glissez vers la gauche pour supprimer",
+                                onDismiss = { showTutorial = false }
+                            )
+                        }
+                    }
+                }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
@@ -186,7 +242,7 @@ private fun CamerasTopBarModern(stats: Map<String, Int>) {
                     colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 28.dp)  // ← Réduit significativement
+            .padding(horizontal = 20.dp, vertical = 28.dp)
     ) {
         Column {
             Row(
@@ -205,7 +261,7 @@ private fun CamerasTopBarModern(stats: Map<String, Int>) {
                     Text(
                         "Sécurité en temps réel",
                         color = Color.White,
-                        fontSize = 26.sp,                    // ← réduit de 32 → 26
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.6).sp
                     )
@@ -220,7 +276,7 @@ private fun CamerasTopBarModern(stats: Map<String, Int>) {
                 }
             }
 
-            Spacer(Modifier.height(24.dp))  // ← réduit de 32 → 24
+            Spacer(Modifier.height(24.dp))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -238,7 +294,6 @@ private fun CamerasTopBarModern(stats: Map<String, Int>) {
     }
 }
 
-// Carte de stats plus compacte (même style que pour Sensors)
 @Composable
 private fun QuickStatCardCompact(
     value: String,
@@ -259,7 +314,7 @@ private fun QuickStatCardCompact(
             Text(
                 text = value,
                 color = Color.White,
-                fontSize = 24.sp,                  // ← réduit de 28 → 24
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.8).sp
             )
@@ -270,23 +325,6 @@ private fun QuickStatCardCompact(
                 fontSize = 11.sp,
                 letterSpacing = 0.3.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun QuickStatCard(value: String, label: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.2f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = value, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-            Text(text = label, color = Color.White.copy(0.9f), fontSize = 12.sp)
         }
     }
 }
@@ -381,114 +419,177 @@ private fun CameraCard(camera: Camera) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (pressed) 16.dp else 8.dp)
-    val offsetY by animateDpAsState(if (pressed) (-6).dp else 0.dp)
+
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 4.dp else 1.dp,
+        animationSpec = tween(200)
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = tween(200)
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = offsetY)
-            .shadow(elevation, RoundedCornerShape(28.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { expanded = !expanded },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(camera.status.color.copy(0.1f), MaterialTheme.colorScheme.surface)
-                    )
-                )
-                .padding(20.dp)
+                .clickable(interactionSource = interactionSource, indication = null) {
+                    expanded = !expanded
+                }
+                .padding(18.dp)
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(camera.type.color.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(camera.type.color.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                    Icon(
+                        camera.type.icon,
+                        contentDescription = null,
+                        tint = camera.type.color,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = camera.location,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            camera.type.icon,
-                            contentDescription = null,
-                            tint = camera.type.color,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(camera.location, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Badge(containerColor = camera.status.color) {
-                                Text(camera.status.displayName, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Badge(containerColor = camera.type.color.copy(alpha = 0.2f)) {
-                                Text(camera.type.displayName, fontSize = 10.sp, color = camera.type.color, fontWeight = FontWeight.Medium)
-                            }
+                        Badge(
+                            containerColor = camera.status.color,
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = camera.status.displayName,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            camera.id,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                            fontSize = 13.sp
-                        )
+
+                        Badge(
+                            containerColor = camera.type.color.copy(alpha = 0.15f),
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = camera.type.displayName,
+                                fontSize = 11.sp,
+                                color = camera.type.color,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StatItem(value = camera.resolution, label = "Résolution", modifier = Modifier.weight(1f))
-                    StatItem(value = if (camera.nightVision) "Oui" else "Non", label = "Vision nocturne", modifier = Modifier.weight(1f))
-                    StatItem(value = camera.lastMaintenance, label = "Dernière maintenance", modifier = Modifier.weight(1f))
-                }
+            Spacer(Modifier.height(14.dp))
 
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ModernStatItem(
+                    value = camera.resolution,
+                    label = "Résolution",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = if (camera.nightVision) "Oui" else "Non",
+                    label = "Vision nocturne",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = camera.lastMaintenance,
+                    label = "Dern. maintenance",
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-                        InfoRow(icon = Icons.Default.LocationOn, label = "Emplacement", value = camera.location)
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
 
-                        Spacer(Modifier.height(12.dp))
+                    InfoRow(
+                        icon = Icons.Default.LocationOn,
+                        label = "Emplacement",
+                        value = camera.location
+                    )
 
-                        InfoRow(icon = Icons.Default.Lightbulb, label = "Lampadaire associé", value = camera.associatedStreetlight)
+                    Spacer(Modifier.height(10.dp))
 
-                        Spacer(Modifier.height(12.dp))
+                    InfoRow(
+                        icon = Icons.Default.Lightbulb,
+                        label = "Lampadaire",
+                        value = camera.associatedStreetlight
+                    )
 
-                        InfoRow(icon = Icons.Default.CalendarMonth, label = "Date d'installation", value = camera.installDate)
+                    Spacer(Modifier.height(10.dp))
 
-                        Spacer(Modifier.height(16.dp))
+                    InfoRow(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "Installation",
+                        value = camera.installDate
+                    )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { /* TODO */ }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Settings, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Configurer")
-                            }
-                            Button(
-                                onClick = { /* TODO */ },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = NoorCyan)
-                            ) {
-                                Icon(Icons.Default.Videocam, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Visualiser")
-                            }
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Configurer", fontSize = 13.sp)
+                        }
+                        Button(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = NoorCyan)
+                        ) {
+                            Icon(Icons.Default.Videocam, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Visualiser", fontSize = 13.sp)
                         }
                     }
                 }
@@ -498,15 +599,42 @@ private fun CameraCard(camera: Camera) {
 }
 
 @Composable
-private fun StatItem(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+private fun ModernStatItem(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
 @Composable
-private fun InfoRow(icon: ImageVector, label: String, value: String) {
+private fun InfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(0.6f), modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))

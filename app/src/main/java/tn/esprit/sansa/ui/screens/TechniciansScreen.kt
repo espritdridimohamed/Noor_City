@@ -4,11 +4,14 @@ package tn.esprit.sansa.ui.screens
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -16,6 +19,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -34,6 +39,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
+import androidx.compose.runtime.saveable.rememberSaveable
+import tn.esprit.sansa.ui.components.CoachMarkTooltip
+import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.EmptyState
 
 // Palette Noor
 private val NoorBlue = Color(0xFF1E40AF)
@@ -148,18 +157,26 @@ private val mockTechnicians = listOf(
     )
 )
 
+
+// ... imports ...
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TechniciansScreen(
     modifier: Modifier = Modifier,
-    onNavigateToAddTechnician: () -> Unit = {}
+    onNavigateToAddTechnician: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {}
 ) {
+    // List state for swipe-to-delete
+    val techniciansList = remember { mutableStateListOf(*mockTechnicians.toTypedArray()) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<TechnicianStatus?>(null) }
     var selectedSpecialty by remember { mutableStateOf<TechnicianSpecialty?>(null) }
 
-    val filteredTechnicians = remember(searchQuery, selectedStatus, selectedSpecialty) {
-        mockTechnicians.filter { tech ->
+    val filteredTechnicians = remember(techniciansList.size, searchQuery, selectedStatus, selectedSpecialty) {
+        techniciansList.filter { tech ->
             val matchesSearch = searchQuery.isEmpty() ||
                     tech.id.contains(searchQuery, ignoreCase = true) ||
                     tech.name.contains(searchQuery, ignoreCase = true) ||
@@ -170,17 +187,17 @@ fun TechniciansScreen(
         }.sortedBy { it.name }
     }
 
-    val stats = remember(mockTechnicians) {
+    val stats = remember(techniciansList.toList()) {
         mapOf(
-            "Total" to mockTechnicians.size,
-            "Disponibles" to mockTechnicians.count { it.status == TechnicianStatus.AVAILABLE },
-            "En mission" to mockTechnicians.count { it.status == TechnicianStatus.ON_MISSION }
+            "Total" to techniciansList.size,
+            "Disponibles" to techniciansList.count { it.status == TechnicianStatus.AVAILABLE },
+            "En mission" to techniciansList.count { it.status == TechnicianStatus.ON_MISSION }
         )
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { TechniciansTopBar(stats = stats) },
+        topBar = { TechniciansTopBar(stats = stats, onProfileClick = onNavigateToProfile) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAddTechnician,
@@ -229,8 +246,45 @@ fun TechniciansScreen(
                 )
             }
 
-            items(filteredTechnicians) { technician ->
-                TechnicianCard(technician = technician)
+            if (filteredTechnicians.isEmpty()) {
+                item {
+                    EmptyState(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp),
+                        icon = Icons.Default.GroupOff,
+                        title = "Aucun technicien trouvé",
+                        description = "Modifiez vos filtres ou ajoutez un nouveau technicien.",
+                        actionLabel = "Nouveau technicien",
+                        onActionClick = onNavigateToAddTechnician,
+                        iconColor = NoorIndigo
+                    )
+                }
+            } else {
+                itemsIndexed(
+                items = filteredTechnicians,
+                key = { _, technician -> technician.id }
+            ) { index, technician ->
+                Box {
+                    SwipeToDeleteContainer(
+                        item = technician,
+                        onDelete = { techniciansList.remove(technician) }
+                    ) { item ->
+                        TechnicianCard(technician = item)
+                    }
+
+                    if (index == 0 && showTutorial) {
+                        CoachMarkTooltip(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 16.dp)
+                                .offset(x = 16.dp, y = 32.dp), // Adjust position
+                            text = "Glissez vers la gauche pour supprimer",
+                            onDismiss = { showTutorial = false }
+                        )
+                    }
+                }
+            }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
@@ -238,8 +292,9 @@ fun TechniciansScreen(
     }
 }
 
+
 @Composable
-private fun TechniciansTopBar(stats: Map<String, Int>) {
+private fun TechniciansTopBar(stats: Map<String, Int>, onProfileClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -249,7 +304,7 @@ private fun TechniciansTopBar(stats: Map<String, Int>) {
                     colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 28.dp)  // ← Réduit de 48 → 28 dp
+            .padding(horizontal = 20.dp, vertical = 28.dp)
     ) {
         Column {
             Row(
@@ -268,20 +323,31 @@ private fun TechniciansTopBar(stats: Map<String, Int>) {
                     Text(
                         "Gestion des techniciens",
                         color = Color.White,
-                        fontSize = 26.sp,                    // ← Réduit de 32 → 26
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-0.6).sp
                     )
                 }
-                IconButton(onClick = { /* TODO: Refresh */ }) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = "Actualiser",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { /* TODO: Refresh */ }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Actualiser",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    IconButton(onClick = onProfileClick) {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = "Mon Profil",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
+// ... existing code ...
 
             Spacer(Modifier.height(24.dp))  // ← Réduit de 32 → 24
 
@@ -444,145 +510,218 @@ private fun TechnicianCard(technician: Technician) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val elevation by animateDpAsState(if (pressed) 16.dp else 8.dp)
-    val offsetY by animateDpAsState(if (pressed) (-6).dp else 0.dp)
+    
+    // Smoother, more subtle animations
+    val elevation by animateDpAsState(
+        targetValue = if (pressed) 4.dp else 1.dp,
+        animationSpec = tween(200)
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = tween(200)
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .offset(y = offsetY)
-            .shadow(elevation, RoundedCornerShape(28.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { expanded = !expanded },
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(20.dp), // More modern, less rounded
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(technician.status.color.copy(0.1f), MaterialTheme.colorScheme.surface)
-                    )
-                )
-                .padding(20.dp)
+                .clickable(interactionSource = interactionSource, indication = null) { 
+                    expanded = !expanded 
+                }
+                .padding(18.dp) // Slightly reduced padding for modern look
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Avatar with subtle background
+                Box(
+                    modifier = Modifier
+                        .size(56.dp) // Slightly smaller
+                        .clip(RoundedCornerShape(16.dp)) // Rounded square instead of circle
+                        .background(technician.specialty.color.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(technician.specialty.color.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                    Icon(
+                        technician.specialty.icon,
+                        contentDescription = null,
+                        tint = technician.specialty.color,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    // Name - larger and bolder
+                    Text(
+                        text = technician.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    Spacer(Modifier.height(6.dp))
+                    
+                    // Badges - more compact
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            technician.specialty.icon,
-                            contentDescription = null,
-                            tint = technician.specialty.color,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(technician.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Badge(
+                            containerColor = technician.status.color,
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = technician.status.displayName,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Badge(containerColor = technician.status.color) {
-                                Text(technician.status.displayName, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Badge(containerColor = technician.specialty.color.copy(alpha = 0.2f)) {
-                                Text(technician.specialty.displayName, fontSize = 10.sp, color = technician.specialty.color, fontWeight = FontWeight.Medium)
-                            }
+                        
+                        Badge(
+                            containerColor = technician.specialty.color.copy(alpha = 0.15f),
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Text(
+                                text = technician.specialty.displayName,
+                                fontSize = 11.sp,
+                                color = technician.specialty.color,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            technician.id,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-                            fontSize = 13.sp
-                        )
                     }
                 }
+                
+                // Expand indicator
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    StatItem(
-                        value = "${technician.interventionsCount}",
-                        label = "Interventions",
-                        modifier = Modifier.weight(1f)
+            // Stats Row - more compact and modern
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ModernStatItem(
+                    value = "${technician.interventionsCount}",
+                    label = "Interventions",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = "${technician.successRate}%",
+                    label = "Réussite",
+                    modifier = Modifier.weight(1f)
+                )
+                ModernStatItem(
+                    value = technician.lastActivity,
+                    label = "Activité",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Expanded content
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
-                    StatItem(
-                        value = "${technician.successRate}%",
-                        label = "Réussite",
-                        modifier = Modifier.weight(1f)
+
+                    InfoRow(
+                        icon = Icons.Default.Email,
+                        label = "Email",
+                        value = technician.email
                     )
-                    StatItem(
-                        value = technician.lastActivity,
-                        label = "Dernière activité",
-                        modifier = Modifier.weight(1f)
+
+                    Spacer(Modifier.height(10.dp))
+
+                    InfoRow(
+                        icon = Icons.Default.Phone,
+                        label = "Tél",
+                        value = technician.phone
                     )
-                }
 
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    Spacer(Modifier.height(10.dp))
 
-                        InfoRow(
-                            icon = Icons.Default.Email,
-                            label = "Email",
-                            value = technician.email
-                        )
+                    InfoRow(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "Date d'embauche",
+                        value = technician.joinDate
+                    )
 
-                        Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                        InfoRow(
-                            icon = Icons.Default.Phone,
-                            label = "Téléphone",
-                            value = technician.phone
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        InfoRow(
-                            icon = Icons.Default.CalendarMonth,
-                            label = "Date d'embauche",
-                            value = technician.joinDate
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { /* TODO */ }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Default.Assignment, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Assigner")
-                            }
-                            Button(
-                                onClick = { /* TODO */ },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo)
-                            ) {
-                                Icon(Icons.Default.Person, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Profil")
-                            }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Assignment, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Assigner", fontSize = 13.sp)
+                        }
+                        Button(
+                            onClick = { /* TODO */ },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo)
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Profil", fontSize = 13.sp)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// Modern stat component
+@Composable
+private fun ModernStatItem(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(vertical = 10.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
