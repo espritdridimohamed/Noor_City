@@ -1,6 +1,10 @@
 // AddCulturalEventScreen.kt – Ajout d'événement culturel avec design Noor simplifié
 package tn.esprit.sansa.ui.screens
 
+import tn.esprit.sansa.ui.viewmodels.CulturalEventsViewModel
+import tn.esprit.sansa.ui.screens.models.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,26 +23,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import tn.esprit.sansa.ui.theme.SansaTheme
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
+
 private val NoorPink = Color(0xFFEC4899)
-private val NoorIndigo = Color(0xFF6366F1)
-private val NoorOrange = Color(0xFFF97316)
+private val NoorIndigo = Color(0xFF6366F1)// NoorBlue imported from theme/Color.kt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddCulturalEventScreen(
+    viewModel: CulturalEventsViewModel,
+    zonesViewModel: tn.esprit.sansa.ui.viewmodels.ZonesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onAddSuccess: () -> Unit = {},
     onBackPressed: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -55,6 +55,10 @@ fun AddCulturalEventScreen(
 
     val datePickerState = rememberDatePickerState()
     var showDatePicker by remember { mutableStateOf(false) }
+
+    // Dynamic Zones from ViewModel
+    val zones by zonesViewModel.zones.collectAsStateWithLifecycle()
+    val availableZones = remember(zones) { zones.map { it.name } }
 
     // Suggestions de noms d'événements
     val eventNameSuggestions = listOf(
@@ -73,12 +77,6 @@ fun AddCulturalEventScreen(
         "Association Culturelle",
         "Centre des Arts",
         "Office du Tourisme"
-    )
-
-    // Zones disponibles
-    val availableZones = listOf(
-        "Zone A", "Zone B", "Centre-ville", "Médina",
-        "Zone historique", "Parc Municipal", "Place Centrale"
     )
 
     // Heures communes
@@ -109,8 +107,8 @@ fun AddCulturalEventScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorOrange,
-                        cursorColor = NoorOrange
+                        focusedBorderColor = NoorBlue,
+                        cursorColor = NoorBlue
                     )
                 )
 
@@ -124,8 +122,8 @@ fun AddCulturalEventScreen(
                                 onClick = { eventName = suggestion },
                                 label = { Text(suggestion, fontSize = 12.sp) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = NoorOrange.copy(alpha = 0.1f),
-                                    labelColor = NoorOrange
+                                    containerColor = NoorBlue.copy(alpha = 0.1f),
+                                    labelColor = NoorBlue
                                 )
                             )
                         }
@@ -177,7 +175,7 @@ fun AddCulturalEventScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = if (selectedDate != null) NoorOrange else MaterialTheme.colorScheme.onSurface
+                            contentColor = if (selectedDate != null) NoorBlue else MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -196,7 +194,7 @@ fun AddCulturalEventScreen(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = NoorOrange
+                            contentColor = NoorBlue
                         )
                     ) {
                         Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -213,8 +211,8 @@ fun AddCulturalEventScreen(
                             onClick = { selectedTime = time },
                             label = { Text(time, fontSize = 12.sp) },
                             colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = if (selectedTime == time) NoorOrange.copy(0.2f) else MaterialTheme.colorScheme.surface,
-                                labelColor = NoorOrange
+                                containerColor = if (selectedTime == time) NoorBlue.copy(0.2f) else MaterialTheme.colorScheme.surface,
+                                labelColor = NoorBlue
                             )
                         )
                     }
@@ -237,8 +235,8 @@ fun AddCulturalEventScreen(
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorOrange,
-                        cursorColor = NoorOrange
+                        focusedBorderColor = NoorBlue,
+                        cursorColor = NoorBlue
                     ),
                     supportingText = {
                         val hours = duration.toIntOrNull() ?: 0
@@ -269,7 +267,7 @@ fun AddCulturalEventScreen(
                                 { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             } else null,
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = NoorOrange,
+                                selectedContainerColor = NoorBlue,
                                 selectedLabelColor = Color.White
                             )
                         )
@@ -298,8 +296,8 @@ fun AddCulturalEventScreen(
                     minLines = 3,
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorOrange,
-                        cursorColor = NoorOrange
+                        focusedBorderColor = NoorBlue,
+                        cursorColor = NoorBlue
                     ),
                     placeholder = { Text("Décrivez votre événement...", fontSize = 14.sp) }
                 )
@@ -321,8 +319,8 @@ fun AddCulturalEventScreen(
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorOrange,
-                        cursorColor = NoorOrange
+                        focusedBorderColor = NoorBlue,
+                        cursorColor = NoorBlue
                     ),
                     supportingText = {
                         val count = attendees.toIntOrNull() ?: 0
@@ -344,8 +342,8 @@ fun AddCulturalEventScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorOrange,
-                        cursorColor = NoorOrange
+                        focusedBorderColor = NoorBlue,
+                        cursorColor = NoorBlue
                     )
                 )
 
@@ -428,7 +426,19 @@ fun AddCulturalEventScreen(
                 // Bouton de création
                 Button(
                     onClick = {
-                        // TODO: Validation et enregistrement
+                        val newEvent = CulturalEvent(
+                            id = "EVT_${System.currentTimeMillis()}",
+                            name = eventName,
+                            dateTime = Date(selectedDate ?: System.currentTimeMillis()),
+                            zones = selectedZones.toList(),
+                            ambianceType = ambianceType,
+                            status = EventStatus.PENDING,
+                            duration = duration.toIntOrNull() ?: 2,
+                            description = description,
+                            attendees = attendees.toIntOrNull() ?: 0,
+                            organizer = organizer
+                        )
+                        viewModel.addEvent(newEvent)
                         onAddSuccess()
                     },
                     modifier = Modifier
@@ -514,7 +524,7 @@ private fun AddEventTopBar(onBackPressed: () -> Unit) {
             .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(NoorOrange.copy(alpha = 0.9f), NoorOrange.copy(alpha = 0.6f))
+                    colors = listOf(NoorBlue.copy(alpha = 0.9f), NoorBlue.copy(alpha = 0.6f))
                 )
             )
             .padding(horizontal = 24.dp, vertical = 56.dp)
@@ -555,10 +565,11 @@ private fun AddEventTopBar(onBackPressed: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun AddCulturalEventScreenPreview() {
-    SansaTheme {
-        AddCulturalEventScreen()
-    }
-}
+// Preview removed to avoid ViewModel instantiation issues
+// @Preview(showBackground = true)
+// @Composable
+// fun AddCulturalEventScreenPreview() {
+//     SansaTheme {
+//         // AddCulturalEventScreen()
+//     }
+// }

@@ -3,9 +3,7 @@ package tn.esprit.sansa.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -43,73 +41,40 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.screens.models.Sensor
+import tn.esprit.sansa.ui.viewmodels.SensorsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
-// Palette Noor commune
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
+import tn.esprit.sansa.ui.components.CardSkeleton
+
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
+
 private val NoorCyan = Color(0xFF06B6D4)
 private val NoorIndigo = Color(0xFF6366F1)
 
-enum class SensorStatus(val displayName: String, val color: Color) {
-    ACTIVE("Actif", NoorGreen),
-    WARNING("Attention", NoorAmber),
-    ERROR("Erreur", NoorRed),
-    OFFLINE("Hors ligne", Color.Gray)
-}
-
-enum class SensorType(
-    val displayName: String,
-    val color: Color,
-    val icon: ImageVector,
-    val unit: String
-) {
-    LIGHT("Luminosité", NoorAmber, Icons.Default.LightMode, "lux"),
-    MOTION("Mouvement", NoorCyan, Icons.Default.Sensors, "dét./h"),
-    TEMPERATURE("Température", NoorRed, Icons.Default.Thermostat, "°C"),
-    HUMIDITY("Humidité", NoorPurple, Icons.Default.WaterDrop, "%"),
-    POWER("Consommation", NoorGreen, Icons.Default.Power, "W")
-}
-
-data class Sensor(
-    val id: String,
-    val type: SensorType,
-    val streetlightId: String,
-    val streetlightName: String,
-    val currentValue: String,
-    val status: SensorStatus,
-    val lastUpdate: String,
-    val batteryLevel: Int
-)
-
-private val mockSensors = listOf(
-    Sensor("S001", SensorType.LIGHT, "L001", "Lampadaire #001", "746", SensorStatus.ACTIVE, "Il y a 2 min", 92),
-    Sensor("S002", SensorType.MOTION, "L001", "Lampadaire #001", "3", SensorStatus.ACTIVE, "Il y a 5 min", 88),
-    Sensor("S003", SensorType.TEMPERATURE, "L002", "Lampadaire #002", "22", SensorStatus.WARNING, "Il y a 1 min", 45),
-    Sensor("S004", SensorType.LIGHT, "L002", "Lampadaire #002", "593", SensorStatus.ACTIVE, "Il y a 3 min", 95),
-    Sensor("S005", SensorType.HUMIDITY, "L003", "Lampadaire #003", "65", SensorStatus.ERROR, "Il y a 45 min", 12),
-    Sensor("S006", SensorType.POWER, "L003", "Lampadaire #003", "0", SensorStatus.OFFLINE, "Il y a 2h", 0),
-    Sensor("S007", SensorType.TEMPERATURE, "L004", "Lampadaire #004", "24", SensorStatus.ACTIVE, "Il y a 1 min", 78),
-    Sensor("S008", SensorType.MOTION, "L005", "Lampadaire #005", "1", SensorStatus.ACTIVE, "Il y a 8 min", 82)
-)
+// Sensor list is now dynamic from Firebase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SensorsScreenModern(
+fun SensorsScreen(
     modifier: Modifier = Modifier,
-    onNavigateToAddSensor: () -> Unit = {}
+    role: UserRole? = UserRole.CITIZEN,
+    onNavigateToAddSensor: () -> Unit = {},
+    viewModel: SensorsViewModel = viewModel()
 ) {
-    val sensorsList = remember { mutableStateListOf(*mockSensors.toTypedArray()) }
+    val sensors by viewModel.sensors.collectAsState()
     var showTutorial by rememberSaveable { mutableStateOf(true) }
+    val isLoading by viewModel.isLoading.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<SensorStatus?>(null) }
     var selectedType by remember { mutableStateOf<SensorType?>(null) }
 
-    val filteredSensors = remember(sensorsList.size, searchQuery, selectedStatus, selectedType) {
-        sensorsList.filter { sensor ->
+    val filteredSensors = remember(sensors, searchQuery, selectedStatus, selectedType) {
+        sensors.filter { sensor: Sensor ->
             val matchesSearch = searchQuery.isEmpty() ||
                     sensor.id.contains(searchQuery, ignoreCase = true) ||
                     sensor.streetlightName.contains(searchQuery, ignoreCase = true) ||
@@ -120,24 +85,26 @@ fun SensorsScreenModern(
         }.sortedBy { it.streetlightName }
     }
 
-    val stats = remember(sensorsList.toList()) {
+    val stats = remember(sensors) {
         mapOf(
-            "Total" to sensorsList.size,
-            "Actifs" to sensorsList.count { it.status == SensorStatus.ACTIVE },
-            "En alerte" to sensorsList.count { it.status != SensorStatus.ACTIVE }
+            "Total" to sensors.size,
+            "Actifs" to sensors.count { it.status == SensorStatus.ACTIVE },
+            "En alerte" to sensors.count { it.status != SensorStatus.ACTIVE }
         )
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { SensorsTopBarModern(stats = stats) },
+        topBar = { SensorsTopBarModern(stats = stats, onRefresh = { viewModel.refresh() }) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddSensor,
-                containerColor = NoorBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Nouveau capteur")
+            if (role == UserRole.ADMIN || role == UserRole.TECHNICIAN) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddSensor,
+                    containerColor = NoorBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Nouveau capteur")
+                }
             }
         }
     ) { innerPadding ->
@@ -189,7 +156,11 @@ fun SensorsScreenModern(
                 )
             }
 
-            if (filteredSensors.isEmpty()) {
+            if (isLoading) {
+                items(5) {
+                    CardSkeleton()
+                }
+            } else if (filteredSensors.isEmpty()) {
                 item {
                     EmptyState(
                         modifier = Modifier
@@ -206,25 +177,27 @@ fun SensorsScreenModern(
             } else {
                 itemsIndexed(
                     items = filteredSensors,
-                    key = { _, sensor -> sensor.id }
-                ) { index, sensor ->
-                    Box {
-                        SwipeToDeleteContainer(
-                            item = sensor,
-                            onDelete = { sensorsList.remove(sensor) }
-                        ) { item ->
-                            SensorCard(sensor = item)
-                        }
+                    key = { _: Int, sensor: Sensor -> sensor.id }
+                ) { index: Int, sensor: Sensor ->
+                    StaggeredItem(index = index) {
+                        Box {
+                            SwipeToDeleteContainer(
+                                item = sensor,
+                                onDelete = { viewModel.deleteSensor(sensor.id) }
+                            ) { item ->
+                                SensorCard(sensor = item)
+                            }
 
-                        if (index == 0 && showTutorial) {
-                            CoachMarkTooltip(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 16.dp)
-                                    .offset(x = 16.dp, y = 32.dp),
-                                text = "Glissez vers la gauche pour supprimer",
-                                onDismiss = { showTutorial = false }
-                            )
+                            if (index == 0 && showTutorial) {
+                                CoachMarkTooltip(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 16.dp)
+                                        .offset(x = 16.dp, y = 32.dp),
+                                    text = "Glissez vers la gauche pour supprimer",
+                                    onDismiss = { showTutorial = false }
+                                )
+                            }
                         }
                     }
                 }
@@ -235,7 +208,7 @@ fun SensorsScreenModern(
 }
 
 @Composable
-private fun SensorsTopBarModern(stats: Map<String, Int>) {
+private fun SensorsTopBarModern(stats: Map<String, Int>, onRefresh: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -269,7 +242,7 @@ private fun SensorsTopBarModern(stats: Map<String, Int>) {
                         letterSpacing = (-0.5).sp
                     )
                 }
-                IconButton(onClick = { /* TODO: Refresh */ }) {
+                IconButton(onClick = onRefresh) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = "Actualiser",
@@ -498,16 +471,42 @@ private fun SensorCard(sensor: Sensor) {
                             )
                         }
 
-                        Badge(
-                            containerColor = sensor.type.color.copy(alpha = 0.15f),
-                            modifier = Modifier.height(22.dp)
-                        ) {
-                            Text(
-                                text = sensor.type.displayName,
-                                fontSize = 11.sp,
-                                color = sensor.type.color,
-                                fontWeight = FontWeight.Medium
+                        if (sensor.type == SensorType.TEMPERATURE) {
+                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                            val alpha by infiniteTransition.animateFloat(
+                                initialValue = 0.4f,
+                                targetValue = 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "alpha"
                             )
+                            
+                            Surface(
+                                color = NoorRed.copy(alpha = alpha),
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier.height(22.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "LIVE",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -655,7 +654,7 @@ private fun InfoRow(
 @Composable
 private fun PreviewSensorsLight() {
     SansaTheme(darkTheme = false) {
-        SensorsScreenModern()
+        SensorsScreen()
     }
 }
 
@@ -663,6 +662,6 @@ private fun PreviewSensorsLight() {
 @Composable
 private fun PreviewSensorsDark() {
     SansaTheme(darkTheme = true) {
-        SensorsScreenModern()
+        SensorsScreen()
     }
 }

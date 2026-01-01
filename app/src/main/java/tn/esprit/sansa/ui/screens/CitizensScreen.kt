@@ -41,13 +41,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.components.CardSkeleton
+import kotlinx.coroutines.delay
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
+
 private val NoorCyan = Color(0xFF06B6D4)
 private val NoorPink = Color(0xFFEC4899)
 
@@ -119,6 +119,12 @@ fun CitizensScreen(
 ) {
     val citizensList = remember { mutableStateListOf(*mockCitizens.toTypedArray()) }
     var showTutorial by rememberSaveable { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(1500)
+        isLoading = false
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<CitizenStatus?>(null) }
@@ -189,7 +195,11 @@ fun CitizensScreen(
                 )
             }
 
-            if (filteredCitizens.isEmpty()) {
+            if (isLoading) {
+                items(5) {
+                    CardSkeleton()
+                }
+            } else if (filteredCitizens.isEmpty()) {
                 item {
                     EmptyState(
                         modifier = Modifier
@@ -208,23 +218,28 @@ fun CitizensScreen(
                     items = filteredCitizens,
                     key = { _, citizen -> citizen.id }
                 ) { index, citizen ->
-                    Box {
-                        SwipeToDeleteContainer(
-                            item = citizen,
-                            onDelete = { citizensList.remove(citizen) }
-                        ) { item ->
-                            CitizenCard(citizen = item)
-                        }
+                    StaggeredItem(index = index) {
+                        Box {
+                            SwipeToDeleteContainer(
+                                item = citizen,
+                                onDelete = { citizensList.remove(citizen) }
+                            ) { item ->
+                                CitizenCard(
+                                    citizen = item,
+                                    onNavigateToProfile = onNavigateToProfile
+                                )
+                            }
 
-                        if (index == 0 && showTutorial) {
-                            CoachMarkTooltip(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 16.dp)
-                                    .offset(x = 16.dp, y = 32.dp),
-                                text = "Glissez vers la gauche pour supprimer",
-                                onDismiss = { showTutorial = false }
-                            )
+                            if (index == 0 && showTutorial) {
+                                CoachMarkTooltip(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 16.dp)
+                                        .offset(x = 16.dp, y = 32.dp),
+                                    text = "Glissez vers la gauche pour supprimer",
+                                    onDismiss = { showTutorial = false }
+                                )
+                            }
                         }
                     }
                 }
@@ -400,7 +415,10 @@ private fun CitizenStatusFilters(
 }
 
 @Composable
-private fun CitizenCard(citizen: Citizen) {
+private fun CitizenCard(
+    citizen: Citizen,
+    onNavigateToProfile: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -429,7 +447,7 @@ private fun CitizenCard(citizen: Citizen) {
         Column(
             modifier = Modifier
                 .clickable(interactionSource = interactionSource, indication = null) {
-                    expanded = !expanded
+                    onNavigateToProfile()
                 }
                 .padding(18.dp)
         ) {

@@ -43,44 +43,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.components.CardSkeleton
+import kotlinx.coroutines.delay
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorCyan = Color(0xFF06B6D4)
-private val NoorIndigo = Color(0xFF6366F1)
+import tn.esprit.sansa.ui.theme.*
+import tn.esprit.sansa.ui.viewmodels.AuthViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tn.esprit.sansa.ui.screens.models.Technician
+import tn.esprit.sansa.ui.screens.models.TechnicianStatus
+import tn.esprit.sansa.ui.screens.models.TechnicianSpecialty
+// Palette Noor centralisée
 
-enum class TechnicianStatus(val displayName: String, val color: Color) {
-    AVAILABLE("Disponible", NoorGreen),
-    BUSY("Occupé", NoorAmber),
-    ON_MISSION("En mission", NoorBlue),
-    OFFLINE("Hors ligne", NoorRed),
-    ON_LEAVE("En congé", NoorPurple)
-}
-
-enum class TechnicianSpecialty(val displayName: String, val color: Color, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    ELECTRICAL("Électricien", NoorAmber, Icons.Default.ElectricBolt),
-    NETWORK("Réseau", NoorCyan, Icons.Default.Router),
-    MAINTENANCE("Maintenance", NoorBlue, Icons.Default.Build),
-    SURVEILLANCE("Surveillance", NoorPurple, Icons.Default.Videocam),
-    TECHNICAL_SUPPORT("Support technique", NoorGreen, Icons.Default.SupportAgent)
-}
-
-data class Technician(
-    val id: String,
-    val name: String,
-    val email: String,
-    val specialty: TechnicianSpecialty,
-    val status: TechnicianStatus,
-    val phone: String,
-    val interventionsCount: Int,
-    val successRate: Float,
-    val joinDate: String,
-    val lastActivity: String
-)
+// Local definitions removed in favor of shared models in tn.esprit.sansa.ui.screens.models.TechnicianModels.kt
 
 private val mockTechnicians = listOf(
     Technician(
@@ -93,7 +68,8 @@ private val mockTechnicians = listOf(
         156,
         98.5f,
         "Jan 2022",
-        "Il y a 5 min"
+        "Il y a 5 min",
+        listOf("ZONE001")
     ),
     Technician(
         "TECH002",
@@ -105,7 +81,8 @@ private val mockTechnicians = listOf(
         203,
         99.2f,
         "Mar 2021",
-        "Il y a 2h"
+        "Il y a 2h",
+        listOf("ZONE002")
     ),
     Technician(
         "TECH003",
@@ -117,7 +94,8 @@ private val mockTechnicians = listOf(
         189,
         97.8f,
         "Jun 2022",
-        "Il y a 30 min"
+        "Il y a 30 min",
+         listOf("ZONE001", "ZONE003")
     ),
     Technician(
         "TECH004",
@@ -129,7 +107,8 @@ private val mockTechnicians = listOf(
         142,
         98.9f,
         "Sep 2022",
-        "Il y a 1h"
+        "Il y a 1h",
+         listOf("ZONE002")
     ),
     Technician(
         "TECH005",
@@ -141,7 +120,8 @@ private val mockTechnicians = listOf(
         98,
         96.5f,
         "Nov 2023",
-        "Il y a 2 jours"
+        "Il y a 2 jours",
+         listOf("ZONE003")
     ),
     Technician(
         "TECH006",
@@ -153,7 +133,8 @@ private val mockTechnicians = listOf(
         175,
         99.1f,
         "Feb 2021",
-        "Il y a 1 jour"
+        "Il y a 1 jour",
+         listOf("ZONE001")
     )
 )
 
@@ -165,11 +146,37 @@ private val mockTechnicians = listOf(
 fun TechniciansScreen(
     modifier: Modifier = Modifier,
     onNavigateToAddTechnician: () -> Unit = {},
-    onNavigateToProfile: () -> Unit = {}
+    onNavigateToProfile: () -> Unit = {},
+    viewModel: AuthViewModel = viewModel()
 ) {
-    // List state for swipe-to-delete
-    val techniciansList = remember { mutableStateListOf(*mockTechnicians.toTypedArray()) }
+    val realTechnicians by viewModel.technicians.collectAsState()
+    
+    // Map UserAccount to Technician view model
+    val techniciansList = remember(realTechnicians) {
+        realTechnicians.map { account ->
+            Technician(
+                id = account.uid,
+                name = account.name,
+                email = account.email,
+                specialty = TechnicianSpecialty.entries.find { it.displayName == account.specialty } ?: TechnicianSpecialty.MAINTENANCE,
+                status = TechnicianStatus.AVAILABLE,
+                phone = "+216 -- --- ---",
+                interventionsCount = 0,
+                successRate = 100f,
+                joinDate = "Nouveau",
+                lastActivity = "À l'instant"
+            )
+        }.toMutableStateList()
+    }
+    
     var showTutorial by rememberSaveable { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchTechnicians()
+        delay(800) 
+        isLoading = false
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<TechnicianStatus?>(null) }
@@ -246,7 +253,11 @@ fun TechniciansScreen(
                 )
             }
 
-            if (filteredTechnicians.isEmpty()) {
+            if (isLoading) {
+                items(5) {
+                    CardSkeleton()
+                }
+            } else if (filteredTechnicians.isEmpty()) {
                 item {
                     EmptyState(
                         modifier = Modifier
@@ -262,29 +273,34 @@ fun TechniciansScreen(
                 }
             } else {
                 itemsIndexed(
-                items = filteredTechnicians,
-                key = { _, technician -> technician.id }
-            ) { index, technician ->
-                Box {
-                    SwipeToDeleteContainer(
-                        item = technician,
-                        onDelete = { techniciansList.remove(technician) }
-                    ) { item ->
-                        TechnicianCard(technician = item)
-                    }
+                    items = filteredTechnicians,
+                    key = { _, technician -> technician.id }
+                ) { index, technician ->
+                    StaggeredItem(index = index) {
+                        Box {
+                            SwipeToDeleteContainer(
+                                item = technician,
+                                onDelete = { techniciansList.remove(technician) }
+                            ) { item ->
+                                TechnicianCard(
+                                    technician = item,
+                                    onNavigateToProfile = onNavigateToProfile
+                                )
+                            }
 
-                    if (index == 0 && showTutorial) {
-                        CoachMarkTooltip(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 16.dp)
-                                .offset(x = 16.dp, y = 32.dp), // Adjust position
-                            text = "Glissez vers la gauche pour supprimer",
-                            onDismiss = { showTutorial = false }
-                        )
+                            if (index == 0 && showTutorial) {
+                                CoachMarkTooltip(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 16.dp)
+                                        .offset(x = 16.dp, y = 32.dp),
+                                    text = "Glissez vers la gauche pour supprimer",
+                                    onDismiss = { showTutorial = false }
+                                )
+                            }
+                        }
                     }
                 }
-            }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
@@ -506,7 +522,10 @@ private fun SpecialtyFilters(
 }
 
 @Composable
-private fun TechnicianCard(technician: Technician) {
+private fun TechnicianCard(
+    technician: Technician,
+    onNavigateToProfile: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -536,7 +555,7 @@ private fun TechnicianCard(technician: Technician) {
         Column(
             modifier = Modifier
                 .clickable(interactionSource = interactionSource, indication = null) { 
-                    expanded = !expanded 
+                    onNavigateToProfile()
                 }
                 .padding(18.dp) // Slightly reduced padding for modern look
         ) {
@@ -761,6 +780,6 @@ private fun PreviewTechniciansLight() {
 @Composable
 private fun PreviewTechniciansDark() {
     SansaTheme(darkTheme = true) {
-        TechniciansScreen()
+        TechniciansScreen(onNavigateToProfile = {}) // Fixed preview
     }
 }

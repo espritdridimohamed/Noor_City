@@ -19,4 +19,20 @@ enum class SensorType(
     POWER("Consommation", Icons.Default.Power, Color(0xFF10B981), "W")
 }
 
-enum class SensorStatus { ACTIVE, WARNING, ERROR, OFFLINE }
+enum class SensorStatus(val displayName: String, val color: Color) {
+    ACTIVE("Actif", Color(0xFF10B981)),
+    WARNING("Attention", Color(0xFFF59E0B)),
+    ERROR("Erreur", Color(0xFFEF4444)),
+    OFFLINE("Hors ligne", Color.Gray)
+}
+
+data class Sensor(
+    val id: String,
+    val type: SensorType,
+    val streetlightId: String,
+    val streetlightName: String,
+    val currentValue: String,
+    val status: SensorStatus,
+    val lastUpdate: String,
+    val batteryLevel: Int
+)

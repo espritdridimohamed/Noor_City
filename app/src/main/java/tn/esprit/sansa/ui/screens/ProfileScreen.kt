@@ -1,14 +1,12 @@
 // ProfileScreen.kt – Interface de profil (Technicien/Citoyen) avec design Noor
 package tn.esprit.sansa.ui.screens
 
-import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +20,7 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,85 +37,45 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
+import tn.esprit.sansa.ui.theme.*
+import tn.esprit.sansa.ui.screens.models.*
 
-// Palette Noor (locale pour ce fichier)
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorCyan = Color(0xFF06B6D4)
-private val NoorIndigo = Color(0xFF6366F1)
-
-enum class UserRole(val displayName: String, val color: Color) {
-    TECHNICIAN("Technicien", NoorBlue),
-    CITIZEN("Citoyen", NoorGreen),
-    ADMIN("Administrateur", NoorPurple)
+// Extension pour garder les couleurs dans le profil sans polluer le modèle de données global
+val UserRole.color: Color get() = when(this) {
+    UserRole.TECHNICIAN -> NoorBlue
+    UserRole.CITIZEN -> NoorBlue
+    UserRole.ADMIN -> NoorPurple
 }
-
-data class UserProfile(
-    val id: String,
-    val name: String,
-    val role: UserRole,
-    val email: String,
-    val phone: String,
-    val address: String,
-    val bio: String,
-    val stats: Map<String, String>,
-    val joinDate: String,
-    val isVerified: Boolean
-)
-
-// Mock Data
-private val mockTechnicianProfile = UserProfile(
-    id = "TECH-2025-001",
-    name = "Ahmed Ben Salem",
-    role = UserRole.TECHNICIAN,
-    email = "ahmed.bensalem@sansa.tn",
-    phone = "+216 98 765 432",
-    address = "Centre de maintenance Nord, Tunis",
-    bio = "Spécialiste en éclairage LED et maintenance préventive. Passionné par les solutions Smart City.",
-    stats = mapOf(
-        "Interventions" to "156",
-        "Réussite" to "98.5%",
-        "Heures" to "1,240"
-    ),
-    joinDate = "Janvier 2022",
-    isVerified = true
-)
-
-private val mockCitizenProfile = UserProfile(
-    id = "CIT-2025-089",
-    name = "Sarra Amri",
-    role = UserRole.CITIZEN,
-    email = "sarra.amri@email.tn",
-    phone = "+216 22 345 678",
-    address = "15 Rue de Carthage, Marsa",
-    bio = "Citoyenne engagée pour l'amélioration de l'éclairage urbain dans mon quartier.",
-    stats = mapOf(
-        "Signalements" to "12",
-        "Impact" to "85%",
-        "Points" to "450"
-    ),
-    joinDate = "Mars 2023",
-    isVerified = true
-)
 
 @Composable
 fun ProfileScreen(
-    modifier: Modifier = Modifier,
-    isTechnician: Boolean = true, // Bascule pour la démo
+    account: UserAccount?,
     onEditProfile: () -> Unit = {},
-    onLogOut: () -> Unit = {}
+    onLogOut: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
+    onBack: () -> Unit = {},
+    onDeleteAccount: () -> Unit = {}
 ) {
-    val profile = if (isTechnician) mockTechnicianProfile else mockCitizenProfile
+    if (account == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = NoorBlue)
+        }
+        return
+    }
+
+    val isTechnician = account.role == UserRole.TECHNICIAN
+    
+    // Mocking the extra info that isn't in UserAccount (for demo)
+    val bio = if (isTechnician) "Spécialiste en éclairage LED et maintenance préventive." else "Citoyenne engagée pour l'amélioration urbaine."
+    val stats = if (isTechnician) mapOf("Interventions" to "156", "Réussite" to "98.5%", "Heures" to "1,240")
+                else mapOf("Signalements" to "12", "Impact" to "85%", "Points" to "450")
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { ProfileTopBar() }
+        topBar = { ProfileTopBar(onBack = onBack, onSettingsClick = onNavigateToSettings) }
     ) { innerPadding ->
         LazyColumn(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -124,28 +83,28 @@ fun ProfileScreen(
             // Header avec Avatar
             item {
                 StaggeredEntry(delayMillis = 0) {
-                    ProfileHeader(profile)
+                    ProfileHeader(account)
                 }
             }
 
             // Stats Cards
             item {
                 StaggeredEntry(delayMillis = 150) {
-                    ProfileStats(profile.stats, profile.role.color)
+                    ProfileStats(stats, account.role.color)
                 }
             }
 
             // Bio & Info
             item {
                 StaggeredEntry(delayMillis = 300) {
-                    ProfileInfoSection(profile)
+                    ProfileInfoSection(account, bio)
                 }
             }
 
             // Actions
             item {
                 StaggeredEntry(delayMillis = 450) {
-                    ProfileActions(onEditProfile, onLogOut, profile.role.color)
+                    ProfileActions(onEditProfile, onLogOut, onDeleteAccount, account.role.color, isTechnician)
                 }
             }
 
@@ -225,7 +184,7 @@ fun AnimatedCounter(
 }
 
 @Composable
-private fun ProfileTopBar() {
+private fun ProfileTopBar(onBack: () -> Unit, onSettingsClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -236,7 +195,7 @@ private fun ProfileTopBar() {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { /* TODO: Back */ }) {
+            IconButton(onClick = onBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
             }
             Text(
@@ -244,7 +203,7 @@ private fun ProfileTopBar() {
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
-            IconButton(onClick = { /* TODO: Settings */ }) {
+            IconButton(onClick = onSettingsClick) {
                 Icon(Icons.Default.Settings, contentDescription = "Paramètres")
             }
         }
@@ -252,7 +211,7 @@ private fun ProfileTopBar() {
 }
 
 @Composable
-private fun ProfileHeader(profile: UserProfile) {
+private fun ProfileHeader(account: UserAccount) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(bottom = 24.dp)
@@ -268,12 +227,12 @@ private fun ProfileHeader(profile: UserProfile) {
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            colors = listOf(profile.role.color, profile.role.color.copy(alpha = 0.5f))
+                            colors = listOf(account.role.color, account.role.color.copy(alpha = 0.5f))
                         )
                     )
             )
 
-            // Placeholder Avatar (Ici une icône, remplacer par Image en prod)
+            // Placeholder Avatar
             Icon(
                 Icons.Default.Person,
                 contentDescription = null,
@@ -282,7 +241,7 @@ private fun ProfileHeader(profile: UserProfile) {
             )
 
             // Badge de vérification
-            if (profile.isVerified) {
+            if (account.isVerified) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -313,7 +272,7 @@ private fun ProfileHeader(profile: UserProfile) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = profile.name,
+            text = account.name,
             fontSize = 26.sp,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.onBackground
@@ -322,10 +281,10 @@ private fun ProfileHeader(profile: UserProfile) {
         Spacer(Modifier.height(4.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Badge(containerColor = profile.role.color.copy(alpha = 0.15f)) {
+            Badge(containerColor = account.role.color.copy(alpha = 0.15f)) {
                 Text(
-                    profile.role.displayName.uppercase(),
-                    color = profile.role.color,
+                    account.role.displayName.uppercase(),
+                    color = account.role.color,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -333,7 +292,7 @@ private fun ProfileHeader(profile: UserProfile) {
             }
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "ID: ${profile.id}",
+                text = "ID: ${account.uid.take(8)}",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
             )
@@ -382,7 +341,7 @@ private fun ProfileStats(stats: Map<String, String>, accentColor: Color) {
 }
 
 @Composable
-private fun ProfileInfoSection(profile: UserProfile) {
+private fun ProfileInfoSection(account: UserAccount, bio: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -395,7 +354,7 @@ private fun ProfileInfoSection(profile: UserProfile) {
             modifier = Modifier.padding(bottom = 12.dp)
         )
         Text(
-            text = profile.bio,
+            text = bio,
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             lineHeight = 20.sp
@@ -410,14 +369,34 @@ private fun ProfileInfoSection(profile: UserProfile) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        InfoItem(Icons.Outlined.Email, "Email", profile.email)
+        InfoItem(Icons.Outlined.Email, "Email", account.email)
+        
+        if (account.role == UserRole.TECHNICIAN) {
+            Spacer(Modifier.height(16.dp))
+            InfoItem(Icons.Outlined.Badge, "Spécialité", account.specialty ?: "Général")
+            Spacer(Modifier.height(16.dp))
+            InfoItem(Icons.Outlined.LocationOn, "Zone de travail", if (account.workingZone.isNotEmpty()) account.workingZone else "Non assignée")
+        }
+
         Spacer(Modifier.height(16.dp))
-        InfoItem(Icons.Outlined.Phone, "Téléphone", profile.phone)
+        InfoItem(
+            Icons.Outlined.Phone, 
+            "Téléphone", 
+            if (account.phoneNumber.isNotEmpty()) account.phoneNumber else "Non renseigné"
+        )
+
         Spacer(Modifier.height(16.dp))
-        InfoItem(Icons.Outlined.LocationOn, "Adresse", profile.address)
+        val coords = if (account.coordinates.isNotEmpty()) account.coordinates else "Non renseignées"
+        InfoItem(Icons.Outlined.LocationOn, "Coordonnées GPS", coords)
+        
         Spacer(Modifier.height(16.dp))
-        InfoItem(Icons.Outlined.Badge, "Membre depuis", profile.joinDate)
+        InfoItem(Icons.Outlined.Event, "Membre depuis", formatDate(account.createdAt))
     }
+}
+
+private fun formatDate(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRENCH)
+    return sdf.format(java.util.Date(timestamp))
 }
 
 @Composable
@@ -455,7 +434,39 @@ private fun InfoItem(icon: ImageVector, label: String, value: String) {
 }
 
 @Composable
-private fun ProfileActions(onEdit: () -> Unit, onLogout: () -> Unit, accentColor: Color) {
+private fun ProfileActions(
+    onEdit: () -> Unit, 
+    onLogout: () -> Unit, 
+    onDelete: () -> Unit, 
+    accentColor: Color,
+    isTechnician: Boolean
+) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Supprimer le compte", fontWeight = FontWeight.Bold, color = NoorRed) },
+            text = { Text("Cette action est irréversible. Toutes vos données seront effacées.") },
+            confirmButton = {
+                Button(
+                    onClick = { 
+                        showDeleteDialog = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NoorRed)
+                ) {
+                    Text("Confirmer la suppression")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -487,7 +498,23 @@ private fun ProfileActions(onEdit: () -> Unit, onLogout: () -> Unit, accentColor
         ) {
             Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Se déconnecter", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        if (isTechnician) {
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = NoorRed),
+                border = androidx.compose.foundation.BorderStroke(2.dp, NoorRed.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Supprimer mon compte", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -495,15 +522,17 @@ private fun ProfileActions(onEdit: () -> Unit, onLogout: () -> Unit, accentColor
 @Preview(showBackground = true, name = "Profil Technicien")
 @Composable
 private fun PreviewProfileTechnician() {
+    val mockAdmin = UserAccount("ID1", "Admin User", "admin@noor.tn", UserRole.ADMIN)
     SansaTheme {
-        ProfileScreen(isTechnician = true)
+        ProfileScreen(account = mockAdmin)
     }
 }
 
 @Preview(showBackground = true, name = "Profil Citoyen")
 @Composable
 private fun PreviewProfileCitizen() {
+    val mockCitizen = UserAccount("ID2", "Ahmed Ben Salah", "ahmed@gmail.com", UserRole.CITIZEN)
     SansaTheme {
-        ProfileScreen(isTechnician = false)
+        ProfileScreen(account = mockCitizen)
     }
 }

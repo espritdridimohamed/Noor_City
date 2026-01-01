@@ -1,7 +1,7 @@
 // StreetlightsMapScreen.kt — Version corrigée et alignée style moderne (Décembre 2025)
 package tn.esprit.sansa.ui.screens
 
-import android.os.Build
+import androidx.compose.ui.graphics.toArgb
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -48,77 +48,21 @@ import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-
-// Modèles pour les lampadaires
-enum class BulbType(val displayName: String) {
-    LED("LED"),
-    HALOGEN("Halogène"),
-    SODIUM("Sodium haute pression"),
-    MERCURY("Mercure")
-}
-
-enum class StreetlightStatus(val displayName: String, val color: Color) {
-    ON("Allumé", NoorGreen),
-    OFF("Éteint", Color.Gray),
-    MAINTENANCE("Maintenance", NoorAmber),
-    ERROR("Défaillance", NoorRed)
-}
-
-data class Streetlight(
-    val id: String,
-    val bulbType: BulbType,
-    val status: StreetlightStatus,
-    val location: String,
-    val latitude: Double,
-    val longitude: Double,
-    val powerConsumption: Double,
-    val address: String
-)
-
-private val mockStreetlights = listOf(
-    Streetlight("L001", BulbType.LED, StreetlightStatus.ON, "Zone A", 36.8065, 10.1815, 45.2, "Avenue Habib Bourguiba"),
-    Streetlight("L002", BulbType.LED, StreetlightStatus.ON, "Zone A", 36.8070, 10.1820, 47.8, "Rue de la Liberté"),
-    Streetlight("L003", BulbType.HALOGEN, StreetlightStatus.MAINTENANCE, "Zone B", 36.8055, 10.1810, 120.5, "Boulevard du 7 Novembre"),
-    Streetlight("L004", BulbType.LED, StreetlightStatus.ON, "Zone B", 36.8060, 10.1825, 43.1, "Place de la République"),
-    Streetlight("L005", BulbType.SODIUM, StreetlightStatus.ERROR, "Zone C", 36.8075, 10.1805, 0.0, "Avenue Mohammed V"),
-    Streetlight("L006", BulbType.LED, StreetlightStatus.OFF, "Zone C", 36.8050, 10.1830, 0.0, "Rue de Carthage"),
-    Streetlight("L007", BulbType.LED, StreetlightStatus.ON, "Zone D", 36.8080, 10.1815, 46.5, "Avenue de France"),
-    Streetlight("L008", BulbType.MERCURY, StreetlightStatus.ON, "Zone D", 36.8045, 10.1820, 95.3, "Rue Ibn Khaldoun")
-)
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.StreetlightsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tn.esprit.sansa.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreetlightsMapScreen(
-    modifier: Modifier = Modifier
-) {
-    var showAddStreetlight by remember { mutableStateOf(false) }
-
-    if (showAddStreetlight) {
-        // Suppose que cet écran existe ailleurs dans le projet
-        AddStreetlightScreen(
-            onAddSuccess = { showAddStreetlight = false },
-            onBackPressed = { showAddStreetlight = false }
-        )
-    } else {
-        StreetlightsMapMainScreen(
-            modifier = modifier,
-            onNavigateToAddStreetlight = { showAddStreetlight = true }
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StreetlightsMapMainScreen(
+    viewModel: StreetlightsViewModel = viewModel(),
+    role: UserRole? = UserRole.CITIZEN,
     modifier: Modifier = Modifier,
-    onNavigateToAddStreetlight: () -> Unit
+    onNavigateToAddStreetlight: () -> Unit = {}
 ) {
-    val streetlightsList = remember { mutableStateListOf(*mockStreetlights.toTypedArray()) }
+    val streetlightsList by viewModel.streetlights.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var showTutorial by rememberSaveable { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -129,7 +73,7 @@ private fun StreetlightsMapMainScreen(
         streetlightsList.filter { light ->
             val matchesSearch = searchQuery.isEmpty() ||
                     light.id.contains(searchQuery, ignoreCase = true) ||
-                    light.location.contains(searchQuery, ignoreCase = true) ||
+                    light.zoneId.contains(searchQuery, ignoreCase = true) ||
                     light.address.contains(searchQuery, ignoreCase = true)
             val matchesStatus = selectedStatus == null || light.status == selectedStatus
             matchesSearch && matchesStatus
@@ -153,12 +97,14 @@ private fun StreetlightsMapMainScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { StreetlightsTopBar(stats = stats, totalConsumption = totalConsumption) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddStreetlight,
-                containerColor = NoorBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Nouveau lampadaire")
+            if (role == UserRole.ADMIN || role == UserRole.TECHNICIAN) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddStreetlight,
+                    containerColor = NoorBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Nouveau lampadaire")
+                }
             }
         }
     ) { innerPadding ->
@@ -245,11 +191,13 @@ private fun StreetlightsMapMainScreen(
                     key = { _, light -> light.id }
                 ) { index, light ->
                     Box {
-                        SwipeToDeleteContainer(
-                            item = light,
-                            onDelete = { streetlightsList.remove(light) }
-                        ) { item ->
-                            StreetlightCard(streetlight = item)
+                        tn.esprit.sansa.ui.components.StaggeredItem(index = index) {
+                            SwipeToDeleteContainer(
+                                item = light,
+                                onDelete = { viewModel.deleteStreetlight(it.id) }
+                            ) { item ->
+                                StreetlightCard(streetlight = item)
+                            }
                         }
 
                         if (index == 0 && showTutorial) {
@@ -439,6 +387,58 @@ private fun StatusFilters(
 
 @Composable
 private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
+    val markersJson = remember(filteredStreetlights) {
+        filteredStreetlights.map { light ->
+            "{lat: ${light.latitude}, lng: ${light.longitude}, name: '${light.id}', status: '${light.status.displayName}', color: '${String.format("#%06X", (0xFFFFFF and light.status.color.toArgb()))}'}"
+        }.joinToString(",")
+    }
+
+    val html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                #map { height: 100vh; width: 100vw; margin: 0; padding: 0; border-radius: 20px; }
+                .marker-icon {
+                    width: 12px; height: 12px;
+                    border-radius: 50%;
+                    border: 2px solid white;
+                    box-shadow: 0 0 5px rgba(0,0,0,0.3);
+                }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                var map = L.map('map').setView([36.8065, 10.1815], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+                var lights = [$markersJson];
+                var group = L.featureGroup();
+                
+                lights.forEach(function(l) {
+                    var icon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: '<div class="marker-icon" style="background-color: ' + l.color + '"></div>',
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
+                    });
+
+                    var marker = L.marker([l.lat, l.lng], {icon: icon}).addTo(map)
+                        .bindPopup("<b>" + l.name + "</b><br>Statut: " + l.status);
+                    group.addLayer(marker);
+                });
+
+                if (lights.length > 0) {
+                    map.fitBounds(group.getBounds().pad(0.2));
+                }
+            </script>
+        </body>
+        </html>
+    """.trimIndent()
+
     AndroidView(
         factory = { context ->
             WebView(context).apply {
@@ -448,22 +448,18 @@ private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
                 )
                 webViewClient = WebViewClient()
                 settings.javaScriptEnabled = true
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    settings.safeBrowsingEnabled = true
-                }
-                // Pour une vraie carte → utiliser Mapbox, Google Maps SDK, ou OSM avec Leaflet
-                loadUrl("https://www.openstreetmap.org")
+                loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
             }
         },
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(350.dp)
             .padding(horizontal = 20.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        update = { webView ->
+            webView.loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
+        }
     )
 }
 
@@ -573,7 +569,7 @@ private fun StreetlightCard(streetlight: Streetlight) {
                     modifier = Modifier.weight(1f)
                 )
                 ModernStatItem(
-                    value = streetlight.location,
+                    value = streetlight.zoneId,
                     label = "Zone",
                     modifier = Modifier.weight(1f)
                 )

@@ -41,88 +41,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.LightingProgramsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorCyan = Color(0xFF06B6D4)
-private val NoorTeal = Color(0xFF14B8A6)
-
-enum class ProgramStatus(val displayName: String, val color: Color) {
-    ACTIVE("Actif", NoorGreen),
-    SCHEDULED("Planifié", NoorBlue),
-    PAUSED("En pause", NoorAmber),
-    INACTIVE("Inactif", Color.Gray)
-}
-
-enum class LightingRuleType(val displayName: String, val color: Color, val icon: ImageVector) {
-    TIME_BASED("Basé sur l'heure", NoorBlue, Icons.Default.Schedule),
-    SENSOR_BASED("Basé sur capteurs", NoorCyan, Icons.Default.Sensors),
-    EVENT_BASED("Basé sur événements", NoorPurple, Icons.Default.Event),
-    MANUAL("Manuel", NoorAmber, Icons.Default.TouchApp),
-    ADAPTIVE("Adaptatif", NoorTeal, Icons.Default.AutoMode),
-    EMERGENCY("Urgence", NoorRed, Icons.Default.Emergency)
-}
-
-data class LightingRule(
-    val type: LightingRuleType,
-    val description: String,
-    val parameters: String
-)
-
-data class LightingProgram(
-    val id: String,
-    val name: String,
-    val rules: List<LightingRule>,
-    val associatedStreetlights: List<String>,
-    val status: ProgramStatus,
-    val createdDate: String,
-    val lastModified: String,
-    val priority: Int,
-    val description: String
-)
-
-private val mockPrograms = listOf(
-    LightingProgram(
-        "PROG001",
-        "Éclairage Nocturne Standard",
-        listOf(
-            LightingRule(LightingRuleType.TIME_BASED, "Activation automatique au crépuscule", "18:00 - 06:00 | Intensité: 100%"),
-            LightingRule(LightingRuleType.SENSOR_BASED, "Réduction si absence de mouvement", "Détection mouvement: 30% après 15min")
-        ),
-        listOf("L001", "L002", "L003", "L004", "L005"),
-        ProgramStatus.ACTIVE,
-        "01 Jan 2024",
-        "15 Déc 2024",
-        1,
-        "Programme d'éclairage standard pour les zones résidentielles"
-    ),
-    LightingProgram(
-        "PROG002",
-        "Mode Économie d'Énergie",
-        listOf(
-            LightingRule(LightingRuleType.ADAPTIVE, "Ajustement selon luminosité ambiante", "Capteur luminosité: 0-100%"),
-            LightingRule(LightingRuleType.TIME_BASED, "Réduction nocturne progressive", "00:00 - 05:00 | Intensité: 50%")
-        ),
-        listOf("L006", "L007", "L008", "L009"),
-        ProgramStatus.ACTIVE,
-        "10 Fév 2024",
-        "20 Déc 2024",
-        2,
-        "Optimisation de la consommation énergétique pendant les heures creuses"
-    )
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LightingProgramsScreen(
+    viewModel: LightingProgramsViewModel = viewModel(),
+    role: UserRole? = UserRole.CITIZEN,
     modifier: Modifier = Modifier,
     onNavigateToAddProgram: () -> Unit = {}
 ) {
-    val programsList = remember { mutableStateListOf(*mockPrograms.toTypedArray()) }
+    val programsList by viewModel.programs.collectAsState()
     var showTutorial by rememberSaveable { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -141,7 +76,7 @@ fun LightingProgramsScreen(
         }.sortedBy { it.name }
     }
 
-    val stats = remember(programsList.toList()) {
+    val stats = remember(programsList) {
         mapOf(
             "Total" to programsList.size,
             "Actifs" to programsList.count { it.status == ProgramStatus.ACTIVE },
@@ -153,12 +88,14 @@ fun LightingProgramsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { LightingProgramsTopBarModern(stats = stats) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddProgram,
-                containerColor = NoorBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Ajouter un nouveau programme")
+            if (role == UserRole.ADMIN || role == UserRole.TECHNICIAN) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddProgram,
+                    containerColor = NoorBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Ajouter un nouveau programme")
+                }
             }
         }
     ) { innerPadding ->
@@ -230,11 +167,13 @@ fun LightingProgramsScreen(
                     key = { _, program -> program.id }
                 ) { index, program ->
                     Box {
-                        SwipeToDeleteContainer(
-                            item = program,
-                            onDelete = { programsList.remove(program) }
-                        ) { item ->
-                            LightingProgramCard(program = item)
+                        StaggeredItem(index = index) {
+                            SwipeToDeleteContainer(
+                                item = program,
+                                onDelete = { viewModel.deleteProgram(it.id) }
+                            ) { item ->
+                                LightingProgramCard(program = item)
+                            }
                         }
 
                         if (index == 0 && showTutorial) {

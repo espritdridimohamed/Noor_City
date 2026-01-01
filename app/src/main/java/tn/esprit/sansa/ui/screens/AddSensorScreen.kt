@@ -33,16 +33,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
+import tn.esprit.sansa.ui.theme.*
+
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.SensorsViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
-// Palette Noor commune
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorCyan = Color(0xFF06B6D4)
+// Palette Noor centralisée dans tn.esprit.sansa.ui.theme
+
 
 // Liste fictive de lampadaires
 private val mockStreetlights = listOf(
@@ -58,16 +59,19 @@ private val mockStreetlights = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddSensorScreen(onBack: () -> Unit) {
+fun AddSensorScreen(
+    onBack: () -> Unit,
+    viewModel: SensorsViewModel = viewModel()
+) {
     var selectedType by remember { mutableStateOf<SensorType?>(null) }
     var selectedStreetlight by remember { mutableStateOf("") }
-    var initialValue by remember { mutableStateOf("") }
     var batteryLevel by remember { mutableStateOf(100f) }
     var selectedStatus by remember { mutableStateOf(SensorStatus.ACTIVE) }
-
+    var hardwareId by remember { mutableStateOf("") }
+ 
     var showTypeError by remember { mutableStateOf(false) }
     var showStreetlightError by remember { mutableStateOf(false) }
-    var showValueError by remember { mutableStateOf(false) }
+    var showIdError by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -114,6 +118,38 @@ fun AddSensorScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 FormSection(
+                    title = "Identifiant Matériel (ESP32)",
+                    icon = Icons.Default.Fingerprint,
+                    isError = showIdError
+                ) {
+                    CustomTextField(
+                        value = hardwareId,
+                        onValueChange = {
+                            hardwareId = it
+                            showIdError = false
+                        },
+                        label = "ID du Capteur",
+                        placeholder = "Ex: TEMP_A1B2C3",
+                        isError = showIdError,
+                        keyboardType = KeyboardType.Text
+                    )
+                    Text(
+                        "Saisissez l'ID affiché dans le moniteur série de l'ESP32",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                    )
+                    AnimatedVisibility(visible = showIdError) {
+                        Text(
+                            "Veuillez entrer l'identifiant du matériel",
+                            color = NoorRed,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
+                }
+
+                FormSection(
                     title = "Type de capteur",
                     icon = Icons.Default.Category,
                     isError = showTypeError
@@ -159,39 +195,6 @@ fun AddSensorScreen(onBack: () -> Unit) {
                 }
 
                 FormSection(
-                    title = "Valeur initiale",
-                    icon = Icons.Default.Speed,
-                    isError = showValueError
-                ) {
-                    CustomTextField(
-                        value = initialValue,
-                        onValueChange = {
-                            initialValue = it
-                            showValueError = false
-                        },
-                        label = "Valeur",
-                        placeholder = selectedType?.let { "Ex: ${when (it) {
-                            SensorType.LIGHT -> "750"
-                            SensorType.TEMPERATURE -> "22"
-                            SensorType.HUMIDITY -> "65"
-                            SensorType.MOTION -> "5"
-                            SensorType.POWER -> "120"
-                        }}" } ?: "Entrez une valeur",
-                        suffix = selectedType?.unit ?: "",
-                        isError = showValueError,
-                        keyboardType = KeyboardType.Decimal
-                    )
-                    AnimatedVisibility(visible = showValueError) {
-                        Text(
-                            "Veuillez entrer une valeur numérique valide",
-                            color = NoorRed,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                        )
-                    }
-                }
-
-                FormSection(
                     title = "Niveau de batterie",
                     icon = Icons.Default.BatteryFull
                 ) {
@@ -218,6 +221,10 @@ fun AddSensorScreen(onBack: () -> Unit) {
                     onAdd = {
                         var hasError = false
 
+                        if (hardwareId.isEmpty()) {
+                            showIdError = true
+                            hasError = true
+                        }
                         if (selectedType == null) {
                             showTypeError = true
                             hasError = true
@@ -226,12 +233,21 @@ fun AddSensorScreen(onBack: () -> Unit) {
                             showStreetlightError = true
                             hasError = true
                         }
-                        if (initialValue.isEmpty() || initialValue.toFloatOrNull() == null) {
-                            showValueError = true
-                            hasError = true
-                        }
 
                         if (!hasError) {
+                            val newSensor = Sensor(
+                                id = hardwareId.trim(),
+                                type = selectedType!!,
+                                streetlightId = selectedStreetlight.split(" - ").first(),
+                                streetlightName = selectedStreetlight.split(" - ").last(),
+                                currentValue = "--", // Valeur d'attente
+                                status = selectedStatus,
+                                lastUpdate = "En attente...",
+                                batteryLevel = batteryLevel.toInt()
+                            )
+                            
+                            viewModel.addSensor(newSensor)
+                            
                             showSuccessAnimation = true
                             scope.launch {
                                 delay(1200)

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,8 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -27,6 +30,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import tn.esprit.sansa.ui.screens.*
+import tn.esprit.sansa.ui.utils.Sansa
+import tn.esprit.sansa.ui.viewmodels.*
+import tn.esprit.sansa.ui.screens.models.UserRole
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 sealed class Screen(
     val route: String,
@@ -61,22 +68,45 @@ sealed class Screen(
     object Settings: Screen("settings", "Paramètres", Icons.Default.Settings)
     object ProfileTechnician : Screen("profile_technician", "Profil Technicien", Icons.Default.Person)
     object ProfileCitizen : Screen("profile_citizen", "Profil Citoyen", Icons.Default.Person)
+
+    object EditProfile      : Screen("edit_profile", "Modifier Profil", Icons.Default.Edit)
+    object ChangePassword   : Screen("change_password", "Changer MDP", Icons.Default.LockReset)
+
+    // Auth Screens
+    object Login             : Screen("login", "Connexion", Icons.Default.Login)
+    object Register          : Screen("register", "Inscription", Icons.Default.PersonAdd)
+    object ForgotPassword   : Screen("forgot_password", "Récupération", Icons.Default.LockReset)
+    object AdminTechMgmt    : Screen("admin_tech_mgmt", "Gestion Tech", Icons.Default.AdminPanelSettings)
+    object TechOnboarding   : Screen("tech_onboarding", "Onboarding", Icons.Outlined.RocketLaunch)
 }
+
+private val NoorIndigo = Color(0xFF4F46E5)
 
 @Composable
 fun ModernBottomBar(
     navController: NavHostController,
+    onShowSecondarySheet: () -> Unit,
+    role: UserRole?,
     modifier: Modifier = Modifier
 ) {
-    val primaryItems = listOf(
-        Screen.Streetlights,
-        Screen.Cameras,
-        Screen.Technicians,
-        Screen.Citizens,
-        Screen.Reclamations
-    )
-
-    var showSecondarySheet by remember { mutableStateOf(false) }
+    val strings = Sansa.strings
+    
+    val primaryItems = when (role) {
+        UserRole.ADMIN -> listOf(
+            Screen.Streetlights to "Lampadaires",
+            Screen.Cameras to "Caméras",
+            Screen.Technicians to strings.technicians,
+            Screen.Citizens to strings.citizens,
+            Screen.Reclamations to strings.reclamations
+        )
+        else -> listOf(
+            Screen.Streetlights to "Lampes",
+            Screen.LightingPrograms to "Programmes",
+            Screen.CulturalEvents to "Événements",
+            Screen.Zones to "Zones",
+            Screen.AddReclamation to "Signaler"
+        )
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -94,7 +124,7 @@ fun ModernBottomBar(
         containerColor = Color.Transparent,
         tonalElevation = 0.dp
     ) {
-        primaryItems.forEach { screen ->
+        primaryItems.forEach { (screen, localizedTitle) ->
             val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
 
             NavigationBarItem(
@@ -111,7 +141,7 @@ fun ModernBottomBar(
                 icon = {
                     Icon(
                         imageVector = screen.icon,
-                        contentDescription = screen.title,
+                        contentDescription = localizedTitle,
                         modifier = Modifier.size(if (selected) 30.dp else 26.dp),
                         tint = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f)
@@ -129,7 +159,7 @@ fun ModernBottomBar(
 
         NavigationBarItem(
             selected = false,
-            onClick = { showSecondarySheet = true },
+            onClick = onShowSecondarySheet,
             icon = {
                 Icon(
                     imageVector = Icons.Default.MoreHoriz,
@@ -147,28 +177,33 @@ fun ModernBottomBar(
             )
         )
     }
-
-    if (showSecondarySheet) {
-        SecondaryFeaturesBottomSheet(
-            onDismiss = { showSecondarySheet = false },
-            navController = navController
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecondaryFeaturesBottomSheet(
     onDismiss: () -> Unit,
-    navController: NavHostController
+    navController: NavHostController,
+    role: UserRole?
 ) {
-    val secondaryItems = listOf(
-        Screen.Zones,
-        Screen.Interventions,
-        Screen.CulturalEvents,
-        Screen.LightingPrograms,
-        Screen.Sensors
-    )
+    val strings = Sansa.strings
+    
+    val secondaryItems = when (role) {
+        UserRole.ADMIN -> listOf(
+            Screen.Zones to "Zones",
+            Screen.Interventions to "Interventions",
+            Screen.CulturalEvents to "Événements",
+            Screen.LightingPrograms to "Programmes",
+            Screen.Sensors to "Capteurs",
+            Screen.Settings to strings.settings,
+            Screen.AdminTechMgmt to "Administration"
+        )
+        else -> listOf(
+            Screen.ProfileCitizen to "Mon Profil",
+            Screen.Settings to strings.settings,
+            Screen.History to "Historique"
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -181,7 +216,7 @@ fun SecondaryFeaturesBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Autres fonctionnalités",
+                text = "Plus d'options",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -192,36 +227,39 @@ fun SecondaryFeaturesBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(secondaryItems) { item ->
+                items(secondaryItems) { (screen, localizedTitle) ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(20.dp))
                             .clickable {
-                                navController.navigate(item.route) {
+                                onDismiss()
+                                navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
                                     }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
-                                onDismiss()
                             }
                             .padding(12.dp)
                     ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.title,
-                            modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(NoorIndigo.copy(alpha = 0.1f), RoundedCornerShape(18.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(screen.icon, contentDescription = localizedTitle, tint = NoorIndigo, modifier = Modifier.size(30.dp))
+                        }
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.labelMedium,
+                            text = localizedTitle,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
-                            maxLines = 2
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
                         )
                     }
                 }
@@ -234,33 +272,116 @@ fun SecondaryFeaturesBottomSheet(
 
 @Composable
 fun AppNavigationWithModernBar(
+    modifier: Modifier = Modifier,
+    settingsViewModel: SettingsViewModel,
     navController: NavHostController = rememberNavController(),
-    modifier: Modifier = Modifier
+    authViewModel: AuthViewModel = viewModel()
 ) {
+    val sensorsViewModel: SensorsViewModel = viewModel()
+    val camerasViewModel: CamerasViewModel = viewModel()
+    val culturalEventsViewModel: CulturalEventsViewModel = viewModel()
+    var showSecondarySheet by remember { mutableStateOf(false) }
+    
+    val authState by authViewModel.authState.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
+
+    if (showSecondarySheet) {
+        SecondaryFeaturesBottomSheet(
+            onDismiss = { showSecondarySheet = false },
+            navController = navController,
+            role = currentUser?.role
+        )
+    }
+
     Scaffold(
         modifier = modifier,
         bottomBar = {
-            ModernBottomBar(navController = navController)
+            if (authState is AuthState.Authenticated) {
+                ModernBottomBar(
+                    navController = navController,
+                    onShowSecondarySheet = { showSecondarySheet = true },
+                    role = currentUser?.role
+                )
+            }
         }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Technicians.route,
+            startDestination = if (authState is AuthState.Authenticated) Screen.Home.route else Screen.Login.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Streetlights.route) { StreetlightsMapScreen() }
+            // Auth Flow
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    onLoginSuccess = {
+                        val destination = when {
+                            currentUser?.role == UserRole.ADMIN -> Screen.Streetlights.route 
+                            currentUser?.role == UserRole.TECHNICIAN && currentUser?.isFirstLogin == true -> Screen.TechOnboarding.route
+                            else -> Screen.Home.route
+                        }
+                        navController.navigate(destination) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    },
+                    onNavigateToRegister = { navController.navigate(Screen.Register.route) },
+                    onNavigateToForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
+                    viewModel = authViewModel
+                )
+            }
+            composable(Screen.Register.route) {
+                RegisterScreen(
+                    onRegisterSuccess = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Register.route) { inclusive = true }
+                        }
+                    },
+                    onBackPressed = { navController.popBackStack() },
+                    viewModel = authViewModel
+                )
+            }
+            composable(Screen.ForgotPassword.route) {
+                ForgotPasswordScreen(onBackPressed = { navController.popBackStack() })
+            }
+            composable(Screen.AdminTechMgmt.route) {
+                AdminTechManagementScreen(
+                    onBackPressed = { navController.popBackStack() },
+                    viewModel = authViewModel
+                )
+            }
+            composable(Screen.TechOnboarding.route) {
+                TechOnboardingScreen(
+                    onOnboardingComplete = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.TechOnboarding.route) { inclusive = true }
+                        }
+                    },
+                    authViewModel = authViewModel
+                )
+            }
+
+            composable(Screen.Streetlights.route) {
+                StreetlightsMapScreen(
+                    onNavigateToAddStreetlight = {
+                        navController.navigate(Screen.AddStreetlight.route)
+                    },
+                    role = currentUser?.role
+                )
+            }
 
             composable(Screen.Cameras.route) {
                 CamerasScreen(
                     onNavigateToAddCamera = {
                         navController.navigate(Screen.AddCamera.route)
-                    }
+                    },
+                    viewModel = camerasViewModel,
+                    role = currentUser?.role
                 )
             }
 
             composable(Screen.Technicians.route) {
                 TechniciansScreen(
-                    onNavigateToProfile = { navController.navigate(Screen.ProfileTechnician.route) }
+                    onNavigateToProfile = { navController.navigate(Screen.ProfileTechnician.route) },
+                    viewModel = authViewModel
                 )
             }
             composable(Screen.Citizens.route) {
@@ -270,12 +391,23 @@ fun AppNavigationWithModernBar(
             }
             composable(Screen.Reclamations.route) { ReclamationsScreen() }
 
-            composable(Screen.Zones.route) { ZonesScreen() }
+            composable(Screen.Zones.route) { 
+                ZonesScreen(role = currentUser?.role) 
+            }
             composable(Screen.Interventions.route) { InterventionsScreen() }
-            composable(Screen.CulturalEvents.route) { CulturalEventsScreen() }
+            composable(Screen.CulturalEvents.route) { 
+                CulturalEventsScreen(
+                    role = currentUser?.role,
+                    viewModel = culturalEventsViewModel,
+                    onNavigateToAddEvent = {
+                        navController.navigate(Screen.AddCulturalEvent.route)
+                    }
+                ) 
+            }
 
             composable(Screen.LightingPrograms.route) {
                 LightingProgramsScreen(
+                    role = currentUser?.role,
                     onNavigateToAddProgram = {
                         navController.navigate(Screen.AddLightingProgram.route)
                     }
@@ -283,29 +415,37 @@ fun AppNavigationWithModernBar(
             }
 
             composable(Screen.Sensors.route) {
-                SensorsScreenModern(
+                SensorsScreen(
+                    role = currentUser?.role,
                     onNavigateToAddSensor = {
                         navController.navigate(Screen.AddSensor.route)
-                    }
+                    },
+                    viewModel = sensorsViewModel
                 )
             }
 
             composable(Screen.AddCamera.route) {
                 AddCameraScreen(
                     onAddSuccess = { navController.popBackStack() },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    viewModel = camerasViewModel
                 )
             }
 
             composable(Screen.AddLightingProgram.route) {
                 AddLightingProgramScreen(
                     onAddSuccess = { navController.popBackStack() },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    culturalEventsViewModel = culturalEventsViewModel // Shared instance
                 )
             }
 
             composable(Screen.AddStreetlight.route) {
-                Text("Ajout lampadaire - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
+                AddStreetlightScreen(
+                    onAddSuccess = { navController.popBackStack() },
+                    onBackPressed = { navController.popBackStack() },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             composable(Screen.AddTechnician.route) {
                 Text("Ajout technicien - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
@@ -314,29 +454,98 @@ fun AppNavigationWithModernBar(
                 Text("Ajout citoyen - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
             }
             composable(Screen.AddReclamation.route) {
-                Text("Ajout réclamation - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
+                AddReclamationScreen(onAddSuccess = { navController.popBackStack() }, onBackPressed = { navController.popBackStack() })
             }
             composable(Screen.AddIntervention.route) {
                 Text("Ajout intervention - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
             }
             composable(Screen.AddCulturalEvent.route) {
-                Text("Ajout événement culturel - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
+                AddCulturalEventScreen(
+                    viewModel = culturalEventsViewModel,
+                    onAddSuccess = { navController.popBackStack() },
+                    onBackPressed = { navController.popBackStack() },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             composable(Screen.AddZone.route) {
                 Text("Ajout zone - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
             }
             composable(Screen.AddSensor.route) {
-                AddSensorScreen(onBack = { navController.popBackStack() })
+                AddSensorScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = sensorsViewModel
+                )
             }
 
-            composable(Screen.Home.route) { HomeScreenModern() }
+            composable(Screen.Home.route) { 
+                HomeScreenModern(
+                    settingsViewModel = settingsViewModel,
+                    role = currentUser?.role,
+                    onNavigate = { route -> navController.navigate(route) }
+                ) 
+            }
+            
             composable(Screen.History.route) { HistoryScreen() }
-            composable(Screen.Settings.route) { SettingsScreen() }
+            
             composable(Screen.ProfileTechnician.route) {
-                ProfileScreen(isTechnician = true, onLogOut = { navController.popBackStack() })
+                ProfileScreen(
+                    account = currentUser,
+                    onLogOut = { 
+                        authViewModel.logout()
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    },
+                    onDeleteAccount = {
+                        authViewModel.deleteAccount()
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
+                    onBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.ProfileCitizen.route) {
-                ProfileScreen(isTechnician = false, onLogOut = { navController.popBackStack() })
+                ProfileScreen(
+                    account = currentUser,
+                    onLogOut = { 
+                        authViewModel.logout()
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                    onEditProfile = { navController.navigate(Screen.EditProfile.route) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            
+            composable(Screen.EditProfile.route) {
+                EditProfileScreen(
+                    onBack = { navController.popBackStack() },
+                    onChangePassword = { navController.navigate(Screen.ChangePassword.route) },
+                    onSuccess = { navController.popBackStack() },
+                    viewModel = authViewModel
+                )
+            }
+            
+            composable(Screen.ChangePassword.route) {
+                ChangePasswordScreen(
+                    onBack = { navController.popBackStack() },
+                    onSuccess = { navController.popBackStack() },
+                    viewModel = authViewModel
+                )
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    currentUser = currentUser,
+                    onBack = { navController.popBackStack() },
+                    onLogout = { 
+                        authViewModel.logout()
+                        navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                    },
+                    settingsViewModel = settingsViewModel,
+                    onProfileClick = {
+                        val profileRoute = if (currentUser?.role == UserRole.CITIZEN) Screen.ProfileCitizen.route else Screen.ProfileTechnician.route
+                        navController.navigate(profileRoute)
+                    }
+                )
             }
         }
     }

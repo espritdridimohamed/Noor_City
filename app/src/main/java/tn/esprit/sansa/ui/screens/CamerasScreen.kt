@@ -40,11 +40,19 @@ import tn.esprit.sansa.ui.theme.SansaTheme
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
-import tn.esprit.sansa.models.*
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.CamerasViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.saveable.rememberSaveable
-
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorCyan = Color(0xFF06B6D4)
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.text.style.TextAlign
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
 
 private val mockCameras = listOf(
     Camera(
@@ -95,17 +103,21 @@ private val mockCameras = listOf(
 @Composable
 fun CamerasScreen(
     modifier: Modifier = Modifier,
-    onNavigateToAddCamera: () -> Unit = {}
+    role: UserRole? = UserRole.CITIZEN,
+    onNavigateToAddCamera: () -> Unit = {},
+    viewModel: CamerasViewModel = viewModel()
 ) {
-    val camerasList = remember { mutableStateListOf(*mockCameras.toTypedArray()) }
+    val cameras by viewModel.cameras.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var showTutorial by rememberSaveable { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<CameraStatus?>(null) }
     var selectedType by remember { mutableStateOf<CameraType?>(null) }
+    var streamingCamera by remember { mutableStateOf<Camera?>(null) }
 
-    val filteredCameras = remember(camerasList.size, searchQuery, selectedStatus, selectedType) {
-        camerasList.filter { camera ->
+    val filteredCameras = remember(cameras, searchQuery, selectedStatus, selectedType) {
+        cameras.filter { camera ->
             val matchesSearch = searchQuery.isEmpty() ||
                     camera.id.contains(searchQuery, ignoreCase = true) ||
                     camera.location.contains(searchQuery, ignoreCase = true) ||
@@ -116,24 +128,26 @@ fun CamerasScreen(
         }.sortedBy { it.location }
     }
 
-    val stats = remember(camerasList.toList()) {
+    val stats = remember(cameras) {
         mapOf(
-            "Total" to camerasList.size,
-            "En ligne" to camerasList.count { it.status == CameraStatus.ONLINE || it.status == CameraStatus.RECORDING },
-            "Hors service" to camerasList.count { it.status == CameraStatus.OFFLINE || it.status == CameraStatus.ERROR }
+            "Total" to cameras.size,
+            "En ligne" to cameras.count { it.status == CameraStatus.ONLINE || it.status == CameraStatus.RECORDING },
+            "Hors service" to cameras.count { it.status == CameraStatus.OFFLINE || it.status == CameraStatus.ERROR }
         )
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { CamerasTopBarModern(stats = stats) },
+        topBar = { CamerasTopBarModern(stats = stats, onRefresh = { viewModel.refresh() }) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddCamera,
-                containerColor = NoorBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Ajouter une nouvelle caméra")
+            if (role == UserRole.ADMIN || role == UserRole.TECHNICIAN) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddCamera,
+                    containerColor = NoorBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Ajouter une nouvelle caméra")
+                }
             }
         }
     ) { innerPadding ->
@@ -205,11 +219,16 @@ fun CamerasScreen(
                     key = { _, camera -> camera.id }
                 ) { index, camera ->
                     Box {
-                        SwipeToDeleteContainer(
-                            item = camera,
-                            onDelete = { camerasList.remove(camera) }
-                        ) { item ->
-                            CameraCard(camera = item)
+                        StaggeredItem(index = index) {
+                            SwipeToDeleteContainer(
+                                item = camera,
+                                onDelete = { viewModel.deleteCamera(camera.id) }
+                            ) { item: Camera ->
+                                CameraCard(
+                                    camera = item,
+                                    onViewStream = { streamingCamera = it }
+                                )
+                            }
                         }
 
                         if (index == 0 && showTutorial) {
@@ -228,11 +247,18 @@ fun CamerasScreen(
 
             item { Spacer(Modifier.height(100.dp)) }
         }
+
+        if (streamingCamera != null) {
+            CameraStreamDialog(
+                camera = streamingCamera!!,
+                onDismiss = { streamingCamera = null }
+            )
+        }
     }
 }
 
 @Composable
-private fun CamerasTopBarModern(stats: Map<String, Int>) {
+private fun CamerasTopBarModern(stats: Map<String, Int>, onRefresh: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -266,7 +292,7 @@ private fun CamerasTopBarModern(stats: Map<String, Int>) {
                         letterSpacing = (-0.6).sp
                     )
                 }
-                IconButton(onClick = { /* TODO: Refresh */ }) {
+                IconButton(onClick = onRefresh) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = "Actualiser",
@@ -415,7 +441,10 @@ private fun CameraTypeFilters(
 }
 
 @Composable
-private fun CameraCard(camera: Camera) {
+private fun CameraCard(
+    camera: Camera,
+    onViewStream: (Camera) -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -583,9 +612,10 @@ private fun CameraCard(camera: Camera) {
                             Text("Configurer", fontSize = 13.sp)
                         }
                         Button(
-                            onClick = { /* TODO */ },
+                            onClick = { onViewStream(camera) },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = NoorCyan)
+                            colors = ButtonDefaults.buttonColors(containerColor = NoorCyan),
+                            enabled = camera.streamUrl.isNotBlank()
                         ) {
                             Icon(Icons.Default.Videocam, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -641,6 +671,121 @@ private fun InfoRow(
         Column {
             Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
             Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun CameraStreamDialog(
+    camera: Camera,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Direct : ${camera.location}",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Flux : ${camera.streamUrl}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, null)
+                    }
+                }
+
+                // Stream View
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AndroidView(
+                        factory = { context ->
+                            WebView(context).apply {
+                                webViewClient = WebViewClient()
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                    builtInZoomControls = true
+                                    displayZoomControls = false
+                                }
+                                loadUrl(camera.streamUrl)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    
+                    // Overlay Status
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp),
+                        color = Color.Black.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(NoorRed)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("LIVE", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Toolbar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    IconButton(onClick = { /* Screenshot */ }) {
+                        Icon(Icons.Default.PhotoCamera, null, tint = NoorBlue)
+                    }
+                    IconButton(onClick = { /* Record */ }) {
+                        Icon(Icons.Default.FiberManualRecord, null, tint = NoorRed)
+                    }
+                    IconButton(onClick = { /* Fullscreen */ }) {
+                        Icon(Icons.Default.Fullscreen, null, tint = NoorBlue)
+                    }
+                }
+            }
         }
     }
 }

@@ -1,12 +1,10 @@
-// ReclamationModels.kt
-import tn.esprit.sansa.models.*
+package tn.esprit.sansa.ui.screens.models
 import androidx.compose.ui.graphics.Color
+import tn.esprit.sansa.ui.theme.*
 
-val NoorBlue = Color(0xFF1E40AF)
-val NoorGreen = Color(0xFF10B981)
-val NoorAmber = Color(0xFFF59E0B)
-val NoorRed = Color(0xFFEF4444)
-val NoorPurple = Color(0xFF8B5CF6)
+
+// La palette Noor est maintenant centralisée dans tn.esprit.sansa.ui.theme.NoorPalette
+
 
 enum class ReclamationStatus(val displayName: String, val color: Color) {
     PENDING("En attente", NoorAmber),
@@ -25,7 +23,7 @@ enum class ReclamationPriority(val displayName: String, val color: Color) {
 data class Reclamation(
     val id: String = "",
     val description: String = "",
-    val date: String = "",
+    val date: Long = 0L,
     val status: ReclamationStatus = ReclamationStatus.PENDING,
     val streetlightId: String = "",
     val priority: ReclamationPriority = ReclamationPriority.MEDIUM,

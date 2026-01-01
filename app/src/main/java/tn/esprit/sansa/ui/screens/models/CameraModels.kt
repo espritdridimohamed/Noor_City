@@ -1,18 +1,13 @@
-// CameraModels.kt — Modèles partagés pour les caméras (à placer dans package tn.esprit.sansa.models)
-package tn.esprit.sansa.models
+package tn.esprit.sansa.ui.screens.models
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
-// Palette Noor (déjà définie ailleurs, mais on les réexporte pour cohérence)
-val NoorBlue = Color(0xFF1E40AF)
-val NoorGreen = Color(0xFF10B981)
-val NoorAmber = Color(0xFFF59E0B)
-val NoorRed = Color(0xFFEF4444)
-val NoorPurple = Color(0xFF8B5CF6)
-val NoorCyan = Color(0xFF06B6D4)
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
+
 
 enum class CameraStatus(val displayName: String, val color: Color) {
     ONLINE("En ligne", NoorGreen),
@@ -42,5 +37,6 @@ data class Camera(
     val lastMaintenance: String = "",
     val recordingEnabled: Boolean = true,
     val motionDetection: Boolean = true,
-    val zone: String = ""
+    val zone: String = "",
+    val streamUrl: String = ""
 )

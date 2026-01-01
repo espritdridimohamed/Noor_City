@@ -1,25 +1,22 @@
-// LightingModels.kt - Modèles partagés pour les programmes d'éclairage
-package tn.esprit.sansa.screens.models
+package tn.esprit.sansa.ui.screens.models
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import tn.esprit.sansa.ui.theme.*
 
-// Palette Noor
-val NoorBlue = Color(0xFF1E40AF)
-val NoorGreen = Color(0xFF10B981)
-val NoorAmber = Color(0xFFF59E0B)
-val NoorRed = Color(0xFFEF4444)
-val NoorPurple = Color(0xFF8B5CF6)
-val NoorCyan = Color(0xFF06B6D4)
-val NoorTeal = Color(0xFF14B8A6)
+
+// La palette Noor est maintenant centralisée dans tn.esprit.sansa.ui.theme.NoorPalette
+
 
 enum class ProgramStatus(val displayName: String, val color: Color) {
+    PENDING("En attente", Color.Gray), // For Event workflow
     ACTIVE("Actif", NoorGreen),
     SCHEDULED("Planifié", NoorBlue),
     PAUSED("En pause", NoorAmber),
-    INACTIVE("Inactif", Color.Gray)
+    INACTIVE("Inactif", Color.Gray),
+    COMPLETED("Terminé", NoorPurple) // For Event workflow
 }
 
 enum class LightingRuleType(val displayName: String, val color: Color, val icon: ImageVector) {
@@ -46,5 +43,9 @@ data class LightingProgram(
     val createdDate: String,
     val lastModified: String,
     val priority: Int,
-    val description: String
+    val description: String,
+    // Event Workflow Fields
+    val eventId: String? = null,
+    val technicianId: String? = null,
+    val technicianStatus: TechnicianAssignmentStatus? = null
 )

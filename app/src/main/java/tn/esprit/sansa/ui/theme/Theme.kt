@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -36,11 +37,16 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun SansaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    highContrast: Boolean = false,
+    textSize: Float = 100f,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        highContrast -> if (darkTheme) darkColorScheme(primary = Color.White, onPrimary = Color.Black, background = Color.Black, surface = Color.Black) 
+                        else lightColorScheme(primary = Color.Black, onPrimary = Color.White, background = Color.White, surface = Color.White)
+        
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -52,7 +58,7 @@ fun SansaTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = getTypography(textSize),
         content = content
     )
 }

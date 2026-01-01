@@ -41,103 +41,47 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import androidx.compose.ui.graphics.toArgb
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorCyan = Color(0xFF06B6D4)
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.ZonesViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.view.ViewGroup
+import androidx.compose.ui.viewinterop.AndroidView
+import tn.esprit.sansa.ui.theme.NoorBlue
+
 private val NoorIndigo = Color(0xFF6366F1)
-private val NoorEmerald = Color(0xFF10B981)
-
-enum class ZoneType(val displayName: String, val color: Color, val icon: ImageVector) {
-    RESIDENTIAL("Résidentielle", NoorBlue, Icons.Default.Home),
-    COMMERCIAL("Commerciale", NoorPurple, Icons.Default.Business),
-    INDUSTRIAL("Industrielle", NoorCyan, Icons.Default.Factory),
-    HISTORICAL("Historique", NoorAmber, Icons.Default.AccountBalance),
-    PARK("Parc/Jardin", NoorGreen, Icons.Default.Park),
-    DOWNTOWN("Centre-ville", NoorIndigo, Icons.Default.LocationCity),
-    HIGHWAY("Route/Autoroute", NoorRed, Icons.Default.LocalShipping),
-    MIXED("Mixte", Color(0xFF64748B), Icons.Default.Apps)
-}
-
-enum class ZoneStatus(val displayName: String, val color: Color) {
-    ACTIVE("Active", NoorGreen),
-    MAINTENANCE("En maintenance", NoorAmber),
-    INACTIVE("Inactive", Color.Gray),
-    PLANNING("En planification", NoorBlue)
-}
-
-data class Zone(
-    val id: String,
-    val name: String,
-    val description: String,
-    val associatedStreetlights: List<String>,
-    val type: ZoneType,
-    val status: ZoneStatus,
-    val area: Double,
-    val population: Int,
-    val coordinator: String,
-    val activeStreetlights: Int
-)
-
-private val mockZones = listOf(
-    Zone(
-        "Z001",
-        "Centre-ville Tunis",
-        "Zone principale du centre-ville incluant l'Avenue Habib Bourguiba et ses alentours. Forte densité commerciale et touristique.",
-        listOf("L001", "L002", "L003", "L004", "L005", "L006", "L007", "L008", "L009", "L010"),
-        ZoneType.DOWNTOWN,
-        ZoneStatus.ACTIVE,
-        2.5,
-        45000,
-        "Ahmed Ben Ali",
-        10
-    ),
-    Zone(
-        "Z002",
-        "Médina Historique",
-        "Zone historique protégée avec architecture traditionnelle. Éclairage spécial pour préserver le patrimoine culturel.",
-        listOf("L011", "L012", "L013", "L014", "L015"),
-        ZoneType.HISTORICAL,
-        ZoneStatus.ACTIVE,
-        1.8,
-        12000,
-        "Fatma Gharbi",
-        5
-    ),
-    Zone(
-        "Z003",
-        "Zone Résidentielle Nord",
-        "Quartier résidentiel calme avec écoles et espaces verts. Priorité à l'éclairage de sécurité nocturne.",
-        listOf("L016", "L017", "L018", "L019", "L020", "L021", "L022"),
-        ZoneType.RESIDENTIAL,
-        ZoneStatus.ACTIVE,
-        3.2,
-        28000,
-        "Mohamed Trabelsi",
-        7
-    )
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZonesScreen(
+    viewModel: ZonesViewModel = viewModel(),
+    role: UserRole? = UserRole.CITIZEN,
     modifier: Modifier = Modifier
 ) {
+    val zones by viewModel.zones.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var showAddZone by remember { mutableStateOf(false) }
 
     if (showAddZone) {
         AddZoneScreen(
-            onAddSuccess = { showAddZone = false },
+            onAddSuccess = { 
+                showAddZone = false
+                viewModel.refresh()
+            },
             onBackPressed = { showAddZone = false }
         )
     } else {
         ZonesMainScreen(
+            zones = zones,
+            isLoading = isLoading,
             modifier = modifier,
-            onNavigateToAddZone = { showAddZone = true }
+            onNavigateToAddZone = { showAddZone = true },
+            onDeleteZone = { zone -> viewModel.deleteZone(zone.id) { viewModel.refresh() } },
+            role = role
         )
     }
 }
@@ -145,18 +89,21 @@ fun ZonesScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ZonesMainScreen(
+    zones: List<Zone>,
+    isLoading: Boolean,
     modifier: Modifier = Modifier,
-    onNavigateToAddZone: () -> Unit
+    onNavigateToAddZone: () -> Unit,
+    onDeleteZone: (Zone) -> Unit,
+    role: UserRole?
 ) {
-    val zonesList = remember { mutableStateListOf(*mockZones.toTypedArray()) }
-    var showTutorial by rememberSaveable { mutableStateOf(true) }
-
     var searchQuery by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf<ZoneType?>(null) }
     var selectedStatus by remember { mutableStateOf<ZoneStatus?>(null) }
+    var mapExpanded by remember { mutableStateOf(true) }
+    var showTutorial by rememberSaveable { mutableStateOf(true) }
 
-    val filteredZones = remember(zonesList.size, searchQuery, selectedType, selectedStatus) {
-        zonesList.filter { zone ->
+    val filteredZones = remember(zones, searchQuery, selectedType, selectedStatus) {
+        zones.filter { zone ->
             val matchesSearch = searchQuery.isEmpty() ||
                     zone.id.contains(searchQuery, ignoreCase = true) ||
                     zone.name.contains(searchQuery, ignoreCase = true) ||
@@ -167,11 +114,11 @@ private fun ZonesMainScreen(
         }.sortedBy { it.name }
     }
 
-    val stats = remember(zonesList.toList()) {
+    val stats = remember(zones) {
         mapOf(
-            "Total" to zonesList.size,
-            "Actives" to zonesList.count { it.status == ZoneStatus.ACTIVE },
-            "En maintenance" to zonesList.count { it.status == ZoneStatus.MAINTENANCE }
+            "Total" to zones.size,
+            "Actives" to zones.count { it.status == ZoneStatus.ACTIVE },
+            "En maintenance" to zones.count { it.status == ZoneStatus.MAINTENANCE }
         )
     }
 
@@ -179,12 +126,14 @@ private fun ZonesMainScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { ZonesTopBarModern(stats = stats) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddZone,
-                containerColor = NoorBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Nouvelle zone")
+            if (role == UserRole.ADMIN) {
+                FloatingActionButton(
+                    onClick = onNavigateToAddZone,
+                    containerColor = NoorBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Nouvelle zone")
+                }
             }
         }
     ) { innerPadding ->
@@ -198,6 +147,30 @@ private fun ZonesMainScreen(
             item { Spacer(Modifier.height(8.dp)) }
 
             item { ZoneSearchBar(query = searchQuery, onQueryChange = { searchQuery = it }) }
+
+            item {
+                AnimatedVisibility(
+                    visible = mapExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    ZonesInteractiveMap(zones = filteredZones)
+                }
+                
+                Button(
+                    onClick = { mapExpanded = !mapExpanded },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NoorBlue.copy(alpha = 0.1f),
+                        contentColor = NoorBlue
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(if (mapExpanded) Icons.Default.Map else Icons.Default.Map, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (mapExpanded) "Masquer la carte" else "Afficher la carte", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
 
             item {
                 Text(
@@ -236,12 +209,18 @@ private fun ZonesMainScreen(
                 )
             }
 
-            if (filteredZones.isEmpty()) {
+            if (isLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = NoorBlue)
+                    }
+                }
+            } else if (filteredZones.isEmpty()) {
                 item {
                     EmptyState(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 64.dp),
+                            .padding(top = 32.dp),
                         icon = Icons.Default.LocationCity,
                         title = "Aucune zone trouvée",
                         description = "Vérifiez vos filtres ou ajoutez une nouvelle zone.",
@@ -256,14 +235,16 @@ private fun ZonesMainScreen(
                     key = { _, zone -> zone.id }
                 ) { index, zone ->
                     Box {
-                        SwipeToDeleteContainer(
-                            item = zone,
-                            onDelete = { zonesList.remove(zone) }
-                        ) { item ->
-                            ZoneCard(zone = item)
+                        StaggeredItem(index = index) {
+                            SwipeToDeleteContainer(
+                                item = zone,
+                                onDelete = { onDeleteZone(zone) }
+                            ) { item ->
+                                ZoneCard(zone = item)
+                            }
                         }
 
-                        if (index == 0 && showTutorial) {
+                        if (index == 0 && showTutorial && !mapExpanded) {
                             CoachMarkTooltip(
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
@@ -280,6 +261,79 @@ private fun ZonesMainScreen(
             item { Spacer(Modifier.height(100.dp)) }
         }
     }
+}
+
+@Composable
+fun ZonesInteractiveMap(zones: List<Zone>) {
+    val markersJson = remember(zones) {
+        zones.map { zone ->
+            val radiusMeters = kotlin.math.sqrt((zone.area.takeIf { it > 0 } ?: 0.5) / Math.PI) * 1000
+            "{lat: ${zone.latitude}, lng: ${zone.longitude}, name: '${zone.name.replace("'", "\\'")}', type: '${zone.type.displayName}', radius: $radiusMeters, color: '${String.format("#%06X", (0xFFFFFF and zone.type.color.toArgb()))}'}"
+        }.joinToString(",")
+    }
+
+    val html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                #map { height: 100vh; width: 100vw; margin: 0; padding: 0; border-radius: 20px; }
+                .leaflet-container { background: #f0f2f5; }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                var map = L.map('map').setView([36.8065, 10.1815], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+
+                var zones = [$markersJson];
+                var group = L.featureGroup();
+                
+                zones.forEach(function(z) {
+                    var circle = L.circle([z.lat, z.lng], {
+                        color: z.color,
+                        fillColor: z.color,
+                        fillOpacity: 0.3,
+                        radius: z.radius
+                    }).addTo(map)
+                    .bindPopup("<b>" + z.name + "</b><br>" + z.type);
+                    group.addLayer(circle);
+                });
+
+                if (zones.length > 0) {
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }
+            </script>
+        </body>
+        </html>
+    """.trimIndent()
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                webViewClient = WebViewClient()
+                settings.javaScriptEnabled = true
+                loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        update = { webView ->
+            webView.loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
+        }
+    )
 }
 
 @Composable

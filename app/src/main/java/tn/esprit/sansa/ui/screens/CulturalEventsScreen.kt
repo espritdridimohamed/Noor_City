@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,94 +44,55 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
 import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.StaggeredItem
+import tn.esprit.sansa.ui.screens.models.UserRole
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
-private val NoorPink = Color(0xFFEC4899)
-private val NoorIndigo = Color(0xFF6366F1)
-private val NoorOrange = Color(0xFFF97316)
+import tn.esprit.sansa.ui.theme.*
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.CulturalEventsViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-enum class AmbianceType(
-    val displayName: String,
-    val color: Color,
-    val icon: ImageVector,
-    val description: String
+@Composable
+fun CulturalEventsScreen(
+    viewModel: CulturalEventsViewModel,
+    modifier: Modifier = Modifier,
+    role: UserRole? = UserRole.CITIZEN,
+    onNavigateToAddEvent: () -> Unit = {}
 ) {
-    FESTIVE("Festive", NoorOrange, Icons.Default.Celebration, "Éclairage dynamique et coloré"),
-    ROMANTIC("Romantique", NoorPink, Icons.Default.Favorite, "Lumière douce et tamisée"),
-    PATRIOTIC("Patriotique", NoorRed, Icons.Default.Flag, "Couleurs nationales"),
-    ARTISTIC("Artistique", NoorPurple, Icons.Default.Palette, "Jeu de lumières créatif"),
-    MODERN("Moderne", NoorBlue, Icons.Default.AutoAwesome, "Éclairage LED blanc"),
-    TRADITIONAL("Traditionnel", NoorAmber, Icons.Default.Mosque, "Lumière chaude traditionnelle"),
-    SPORT("Sportif", NoorGreen, Icons.Default.SportsScore, "Éclairage intense et vif"),
-    CHRISTMAS("Noël", NoorIndigo, Icons.Default.AcUnit, "Illuminations de fêtes")
-}
+    val eventsList by viewModel.events.collectAsStateWithLifecycle()
+    val lightingPrograms by viewModel.lightingPrograms.collectAsStateWithLifecycle()
 
-enum class EventStatus(val displayName: String, val color: Color) {
-    UPCOMING("À venir", NoorBlue),
-    ACTIVE("En cours", NoorGreen),
-    COMPLETED("Terminé", Color.Gray),
-    CANCELLED("Annulé", NoorRed)
-}
-
-data class CulturalEvent(
-    val id: String,
-    val name: String,
-    val dateTime: Date,
-    val zones: List<String>,
-    val ambianceType: AmbianceType,
-    val status: EventStatus,
-    val duration: Int, // en heures
-    val description: String,
-    val attendees: Int,
-    val organizer: String
-)
-
-private val mockEvents = listOf(
-    CulturalEvent(
-        "EVT001",
-        "Festival International de Carthage",
-        Date(System.currentTimeMillis() + 5 * 24 * 60 * 60 * 1000),
-        listOf("Zone A", "Zone B", "Centre-ville"),
-        AmbianceType.FESTIVE,
-        EventStatus.UPCOMING,
-        6,
-        "Grand festival de musique et d'arts avec spectacles internationaux",
-        5000,
-        "Ministère de la Culture"
-    ),
-    CulturalEvent(
-        "EVT002",
-        "Nuit des Musées",
-        Date(System.currentTimeMillis()),
-        listOf("Zone historique", "Médina"),
-        AmbianceType.ARTISTIC,
-        EventStatus.ACTIVE,
-        8,
-        "Ouverture nocturne exceptionnelle des musées avec éclairage artistique",
-        1200,
-        "Association des Musées"
+    CulturalEventsContent(
+        eventsList = eventsList,
+        modifier = modifier,
+        lightingPrograms = lightingPrograms, // NEW
+        role = role,
+        onNavigateToAddEvent = onNavigateToAddEvent,
+        onUpdateEventStatus = viewModel::updateEventStatus,
+        onDeleteEvent = viewModel::deleteEvent,
+        onConfirmProgram = { programId -> viewModel.confirmLightingProgram(programId) } // NEW
     )
-)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CulturalEventsScreen(
+private fun CulturalEventsContent(
+    eventsList: List<CulturalEvent>,
     modifier: Modifier = Modifier,
-    onNavigateToAddEvent: () -> Unit = {}
+    lightingPrograms: List<LightingProgram> = emptyList(), // NEW
+    role: UserRole? = UserRole.CITIZEN,
+    onNavigateToAddEvent: () -> Unit = {},
+    onUpdateEventStatus: (CulturalEvent, EventStatus) -> Unit = { _, _ -> },
+    onDeleteEvent: (CulturalEvent) -> Unit = {},
+    onConfirmProgram: (String) -> Unit = {} // NEW
 ) {
-    val eventsList = remember { mutableStateListOf(*mockEvents.toTypedArray()) }
     var showTutorial by rememberSaveable { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<EventStatus?>(null) }
     var selectedAmbiance by remember { mutableStateOf<AmbianceType?>(null) }
 
-    val filteredEvents = remember(eventsList.size, searchQuery, selectedStatus, selectedAmbiance) {
+    val filteredEvents = remember(eventsList, searchQuery, selectedStatus, selectedAmbiance) {
         eventsList.filter { event ->
             val matchesSearch = searchQuery.isEmpty() ||
                     event.id.contains(searchQuery, ignoreCase = true) ||
@@ -138,11 +100,39 @@ fun CulturalEventsScreen(
                     event.description.contains(searchQuery, ignoreCase = true)
             val matchesStatus = selectedStatus == null || event.status == selectedStatus
             val matchesAmbiance = selectedAmbiance == null || event.ambianceType == selectedAmbiance
-            matchesSearch && matchesStatus && matchesAmbiance
+            
+            // FILTER: Citizens should NOT see PENDING events in the main list
+            val isVisibleForRole = if (role == UserRole.CITIZEN) event.status != EventStatus.PENDING else true
+
+            matchesSearch && matchesStatus && matchesAmbiance && isVisibleForRole
         }.sortedBy { it.dateTime }
     }
+    
+    // ADMIN ONLY: Pending events management
+    val pendingEvents = remember(eventsList) {
+        eventsList.filter { it.status == EventStatus.PENDING }
+    }
+    var showPendingDialog by remember { mutableStateOf(false) }
 
-    val stats = remember(eventsList.toList()) {
+    // SIMULATED NOTIFICATION FOR CITIZEN (When an event becomes UPCOMING)
+    // In a real app, this would be triggered by a backend push. 
+    // Here we just check if there are new UPCOMING events that were previously PENDING (mock logic)
+    val hasCitizenNotification by remember(eventsList) {
+        mutableStateOf(eventsList.any { it.status == EventStatus.UPCOMING && it.id == "EVT_NEW" }) // Mock condition
+    }
+
+    // STATE FOR DIALOGS
+    var showTechnicianDialog by remember { mutableStateOf(false) }
+
+    // TECHNICIAN NOTIFICATIONS
+    val myPrograms = remember(lightingPrograms, role) {
+        if (role == UserRole.TECHNICIAN) { // Assuming mock user is TECH001
+            lightingPrograms.filter { it.technicianId == "TECH001" }
+        } else emptyList()
+    }
+    val technicianPendingCount = myPrograms.count { it.technicianStatus == TechnicianAssignmentStatus.WAITING }
+
+    val stats = remember(eventsList) {
         mapOf(
             "Total" to eventsList.size,
             "À venir" to eventsList.count { it.status == EventStatus.UPCOMING },
@@ -153,15 +143,33 @@ fun CulturalEventsScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { CulturalEventsTopBarModern(stats = stats) },
+        topBar = { 
+            CulturalEventsTopBarModern(
+                stats = stats, 
+                role = role,
+                pendingCount = when(role) {
+                    UserRole.ADMIN -> pendingEvents.size + lightingPrograms.count { it.technicianStatus == TechnicianAssignmentStatus.ACCEPTED }
+                    UserRole.TECHNICIAN -> technicianPendingCount
+                    else -> if (hasCitizenNotification) 1 else 0
+                },
+                onNotificationClick = { 
+                    if (role == UserRole.ADMIN) showPendingDialog = true 
+                    else if (role == UserRole.TECHNICIAN) showTechnicianDialog = true
+                    else showPendingDialog = true // For citizen demo
+                }
+            ) 
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAddEvent,
-                containerColor = NoorOrange,
+                containerColor = NoorBlue,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Nouvel événement")
+                Icon(
+                    imageVector = if (role == UserRole.ADMIN) Icons.Default.Add else Icons.Default.PostAdd,
+                    contentDescription = if (role == UserRole.ADMIN) "Nouvel événement" else "Proposer un événement"
+                )
             }
         }
     ) { innerPadding ->
@@ -224,7 +232,7 @@ fun CulturalEventsScreen(
                         description = "Il n'y a rien de prévu pour le moment.",
                         actionLabel = "Créer un événement",
                         onActionClick = onNavigateToAddEvent,
-                        iconColor = NoorOrange
+                        iconColor = NoorBlue
                     )
                 }
             } else {
@@ -232,23 +240,34 @@ fun CulturalEventsScreen(
                     items = filteredEvents,
                     key = { _, event -> event.id }
                 ) { index, event ->
-                    Box {
-                        SwipeToDeleteContainer(
-                            item = event,
-                            onDelete = { eventsList.remove(event) }
-                        ) { item ->
-                            CulturalEventCard(event = item)
-                        }
+                    StaggeredItem(index = index) {
+                        Box {
+                            SwipeToDeleteContainer(
+                                item = event,
+                                onDelete = { onDeleteEvent(event) }
+                            ) { item ->
+                                CulturalEventCard(
+                                    event = item,
+                                    role = role,
+                                    onApprove = {
+                                        onUpdateEventStatus(item, EventStatus.UPCOMING)
+                                    },
+                                    onReject = {
+                                        onUpdateEventStatus(item, EventStatus.CANCELLED)
+                                    }
+                                )
+                            }
 
-                        if (index == 0 && showTutorial) {
-                            CoachMarkTooltip(
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .padding(end = 16.dp)
-                                    .offset(x = 16.dp, y = 32.dp),
-                                text = "Glissez vers la gauche pour supprimer",
-                                onDismiss = { showTutorial = false }
-                            )
+                            if (index == 0 && showTutorial) {
+                                CoachMarkTooltip(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 16.dp)
+                                        .offset(x = 16.dp, y = 32.dp),
+                                    text = "Glissez vers la gauche pour supprimer",
+                                    onDismiss = { showTutorial = false }
+                                )
+                            }
                         }
                     }
                 }
@@ -257,17 +276,61 @@ fun CulturalEventsScreen(
             item { Spacer(Modifier.height(100.dp)) }
         }
     }
+        
+        if (showPendingDialog && role == UserRole.CITIZEN) {
+             AlertDialog(
+                onDismissRequest = { showPendingDialog = false },
+                title = { Text("Mise à jour") },
+                text = { Text("Votre événement 'Festival Lumières' a été approuvé par l'administrateur !") },
+                confirmButton = { TextButton(onClick = { showPendingDialog = false }) { Text("Super !") } }
+            )
+        }
+        
+
+        if (showPendingDialog && role == UserRole.ADMIN) {
+            val acceptedPrograms = lightingPrograms.filter { it.technicianStatus == TechnicianAssignmentStatus.ACCEPTED }
+            PendingEventsDialog(
+                events = pendingEvents,
+                acceptedPrograms = acceptedPrograms,
+                onDismiss = { showPendingDialog = false },
+                onApprove = { event ->
+                     onUpdateEventStatus(event, EventStatus.UPCOMING)
+                     // Removed auto-dialog as per new workflow
+                     showPendingDialog = false 
+                },
+                onReject = { event ->
+                    onUpdateEventStatus(event, EventStatus.CANCELLED)
+                }
+            )
+        }
+
+
+        if (showTechnicianDialog) {
+            TechnicianProgramsDialog(
+                programs = myPrograms,
+                onDismiss = { showTechnicianDialog = false },
+                onConfirm = { program ->
+                    onConfirmProgram(program.id)
+                    // Optional: show success message
+                }
+            )
+        }
 }
 
 @Composable
-private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
+private fun CulturalEventsTopBarModern(
+    stats: Map<String, Int>,
+    role: UserRole? = UserRole.CITIZEN,
+    pendingCount: Int = 0,
+    onNotificationClick: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(NoorOrange.copy(alpha = 0.95f), NoorOrange.copy(alpha = 0.65f))
+                    colors = listOf(NoorBlue.copy(alpha = 0.95f), NoorBlue.copy(alpha = 0.65f))
                 )
             )
             .padding(horizontal = 20.dp, vertical = 28.dp)
@@ -294,13 +357,35 @@ private fun CulturalEventsTopBarModern(stats: Map<String, Int>) {
                         letterSpacing = (-0.6).sp
                     )
                 }
-                IconButton(onClick = { /* TODO: Refresh */ }) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = "Actualiser",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                if ((role == UserRole.ADMIN && pendingCount > 0) || (role == UserRole.CITIZEN && pendingCount > 0)) {
+                     BadgedBox(
+                        badge = {
+                            Badge(
+                                containerColor = if (role == UserRole.ADMIN) NoorRed else NoorGreen,
+                                contentColor = Color.White
+                            ) {
+                                Text("$pendingCount") 
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = onNotificationClick) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                } else {
+                     IconButton(onClick = { /* TODO: Refresh */ }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Actualiser",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 
@@ -441,7 +526,12 @@ private fun AmbianceTypeFilters(
 }
 
 @Composable
-private fun CulturalEventCard(event: CulturalEvent) {
+private fun CulturalEventCard(
+    event: CulturalEvent,
+    role: UserRole? = null,
+    onApprove: () -> Unit = {},
+    onReject: () -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -600,22 +690,43 @@ private fun CulturalEventCard(event: CulturalEvent) {
                     Spacer(Modifier.height(14.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = { /* TODO */ },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Modifier", fontSize = 13.sp)
-                        }
-                        Button(
-                            onClick = { /* TODO */ },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = event.ambianceType.color)
-                        ) {
-                            Icon(Icons.Default.Lightbulb, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Configurer", fontSize = 13.sp)
+                        if (role == UserRole.ADMIN && event.status == EventStatus.PENDING) {
+                            Button(
+                                onClick = onReject,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = NoorRed)
+                            ) {
+                                Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Refuser", fontSize = 13.sp)
+                            }
+                            Button(
+                                onClick = onApprove,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = NoorGreen)
+                            ) {
+                                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Approuver", fontSize = 13.sp)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { /* TODO */ },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Modifier", fontSize = 13.sp)
+                            }
+                            Button(
+                                onClick = { /* TODO */ },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = event.ambianceType.color)
+                            ) {
+                                Icon(Icons.Default.Lightbulb, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Configurer", fontSize = 13.sp)
+                            }
                         }
                     }
                 }
@@ -670,15 +781,154 @@ private fun InfoRow(icon: ImageVector, label: String, value: String) {
 @Preview(showBackground = true, name = "Mode Clair")
 @Composable
 private fun PreviewCulturalEventsLight() {
+    val mockEvents = listOf(
+        CulturalEvent(
+            "EVT001", "Festival Lumières", Date(), listOf("Zone A"), 
+            AmbianceType.FESTIVE, EventStatus.UPCOMING, 2, "Desc", 100, "Org"
+        )
+    )
     SansaTheme(darkTheme = false) {
-        CulturalEventsScreen()
+        CulturalEventsContent(eventsList = mockEvents)
     }
 }
 
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "Mode Sombre")
 @Composable
 private fun PreviewCulturalEventsDark() {
+    val mockEvents = listOf(
+        CulturalEvent(
+            "EVT001", "Festival Lumières", Date(), listOf("Zone A"), 
+            AmbianceType.FESTIVE, EventStatus.UPCOMING, 2, "Desc", 100, "Org"
+        )
+    )
     SansaTheme(darkTheme = true) {
-        CulturalEventsScreen()
+        CulturalEventsContent(eventsList = mockEvents)
     }
+}
+
+@Composable
+private fun PendingEventsDialog(
+    events: List<CulturalEvent>,
+    acceptedPrograms: List<LightingProgram> = emptyList(),
+    onDismiss: () -> Unit,
+    onApprove: (CulturalEvent) -> Unit,
+    onReject: (CulturalEvent) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Événements en attente") },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (events.isNotEmpty()) {
+                    item { Text("Événements en attente", fontWeight = FontWeight.Bold, color = NoorOrange) }
+                    items(events) { event ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(event.name, fontWeight = FontWeight.Bold)
+                                Text(event.organizer, fontSize = 12.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { onReject(event) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = NoorRed),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Refuser")
+                                    }
+                                    Button(
+                                        onClick = { onApprove(event) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = NoorGreen),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Approuver")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (acceptedPrograms.isNotEmpty()) {
+                    item { Text("Validations Techniques", fontWeight = FontWeight.Bold, color = NoorGreen) }
+                    items(acceptedPrograms) { program ->
+                         Card(
+                            colors = CardDefaults.cardColors(containerColor = NoorGreen.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Programme ${program.id}", fontWeight = FontWeight.Bold)
+                                    Text("Technicien a confirmé", fontSize = 12.sp, color = NoorGreen)
+                                }
+                                Icon(Icons.Default.CheckCircle, null, tint = NoorGreen)
+                            }
+                        }
+                    }
+                }
+                
+                if (events.isEmpty() && acceptedPrograms.isEmpty()) {
+                    item { Text("Aucune nouvelle notification.") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Fermer") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TechnicianProgramsDialog(
+    programs: List<LightingProgram>,
+    onDismiss: () -> Unit,
+    onConfirm: (LightingProgram) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mes Affectations") },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(programs) { program ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                Text(program.id, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Badge(containerColor = if(program.technicianStatus == TechnicianAssignmentStatus.ACCEPTED) NoorGreen else NoorAmber) {
+                                    Text(program.technicianStatus?.name ?: "UNKNOWN")
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text("Assignation Lampadaires: ${program.associatedStreetlights.size}", fontWeight = FontWeight.SemiBold)
+                            Text("Lampadaires: ${program.associatedStreetlights.joinToString(", ")}", fontSize = 12.sp)
+                            
+                            Spacer(Modifier.height(16.dp))
+                            if (program.technicianStatus == TechnicianAssignmentStatus.WAITING) {
+                                Button(
+                                    onClick = { onConfirm(program) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NoorBlue),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Confirmer l'intervention")
+                                }
+                            }
+                        }
+                    }
+                }
+                if (programs.isEmpty()) {
+                   item { Text("Aucune affectation en cours.") } 
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Fermer") }
+        }
+    )
 }

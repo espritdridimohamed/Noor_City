@@ -25,20 +25,21 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import tn.esprit.sansa.ui.theme.SansaTheme
-
-// Couleurs Noor définies au niveau du fichier pour être accessibles partout
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
+import tn.esprit.sansa.ui.viewmodels.SettingsViewModel
+import tn.esprit.sansa.ui.utils.Sansa
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tn.esprit.sansa.ui.theme.*
+import tn.esprit.sansa.ui.screens.models.UserRole
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreenModern() {
+fun HomeScreenModern(
+    settingsViewModel: SettingsViewModel = viewModel(),
+    role: UserRole? = UserRole.CITIZEN,
+    onNavigate: (String) -> Unit = {}
+) {
 
-    var isDarkMode by remember { mutableStateOf(false) }
-
-    SansaTheme(darkTheme = isDarkMode) {
+    SansaTheme(darkTheme = settingsViewModel.isDarkMode) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -56,11 +57,6 @@ fun HomeScreenModern() {
                                         )
                                     )
                                 )
-                                .blur(radiusX = 20.dp, radiusY = 20.dp) // Effet glassmorphism
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) { isDarkMode = !isDarkMode }
                                 .padding(horizontal = 20.dp, vertical = 12.dp)
                         ) {
                             Row(
@@ -68,14 +64,14 @@ fun HomeScreenModern() {
                                 modifier = Modifier.align(Alignment.CenterStart)
                             ) {
                                 Icon(
-                                    imageVector = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                    imageVector = if (settingsViewModel.isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
                                     contentDescription = "Basculer le thème",
                                     tint = NoorBlue,
                                     modifier = Modifier.size(36.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = "NoorCity",
+                                    text = Sansa.strings.appTitle,
                                     color = NoorBlue,
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Black,
@@ -109,8 +105,20 @@ fun HomeScreenModern() {
                     .verticalScroll(rememberScrollState())
             ) {
 
+                val dashboardTitle = when (role) {
+                    UserRole.ADMIN -> "Tableau de Bord Admin"
+                    UserRole.TECHNICIAN -> "Espace Technicien"
+                    else -> "Services Citoyens"
+                }
+
+                val dashboardSubtitle = when (role) {
+                    UserRole.ADMIN -> "Gestion et monitoring réseau"
+                    UserRole.TECHNICIAN -> "Interventions et maintenance"
+                    else -> "Accès rapide aux services urbains"
+                }
+
                 Text(
-                    text = "Tableau de bord",
+                    text = dashboardTitle,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -118,7 +126,7 @@ fun HomeScreenModern() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Lampadaires intelligents",
+                    text = dashboardSubtitle,
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     modifier = Modifier.padding(start = 4.dp)
@@ -126,32 +134,68 @@ fun HomeScreenModern() {
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // STATUTS MODERNES
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ModernStatusCard(count = 980, label = "En service", color = NoorGreen)
-                    ModernStatusCard(count = 37, label = "Maintenance", color = NoorAmber)
-                    ModernStatusCard(count = 8, label = "Anomalie", color = NoorRed)
+                // STATUTS MODERNES (Seulement pour Admin ou en version simplifiée)
+                if (role == UserRole.ADMIN) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ModernStatusCard(count = 980, label = "En service", color = NoorGreen)
+                        ModernStatusCard(count = 37, label = "Maintenance", color = NoorAmber)
+                        ModernStatusCard(count = 8, label = "Anomalie", color = NoorRed)
+                    }
+                    Spacer(modifier = Modifier.height(48.dp))
                 }
 
-                Spacer(modifier = Modifier.height(48.dp))
-
-                // MENU 2×4 ULTRA MODERNE
+                // MENU DYNAMIQUE PAR RÔLE
                 Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        ModernMenuCard(title = "Lampadaires", icon = Icons.Default.LightMode)
-                        ModernMenuCard(title = "Caméras", icon = Icons.Default.Videocam)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        ModernMenuCard(title = "Capteurs", icon = Icons.Default.Sensors)
-                        ModernMenuCard(title = "Réclamations", icon = Icons.Default.WarningAmber, badgeCount = 15)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        ModernMenuCard(title = "Interventions", icon = Icons.Default.Build, badgeCount = 7)
-                        ModernMenuCard(title = "Zones", icon = Icons.Default.LocationOn)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        ModernMenuCard(title = "Utilisateurs", icon = Icons.Default.People)
-                        ModernMenuCard(title = "Support", icon = Icons.Default.HeadsetMic, badgeCount = 4)
+                    if (role == UserRole.ADMIN) {
+                        // Admin Mesh
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Lampadaires", icon = Icons.Default.LightMode, onClick = { onNavigate("streetlights") })
+                            ModernMenuCard(title = "Caméras", icon = Icons.Default.Videocam, onClick = { onNavigate("cameras") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = Sansa.strings.sensors, icon = Icons.Default.Sensors, onClick = { onNavigate("sensors") })
+                            ModernMenuCard(title = Sansa.strings.reclamations, icon = Icons.Default.WarningAmber, badgeCount = 15, onClick = { onNavigate("reclamations") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Interventions", icon = Icons.Default.Build, badgeCount = 7, onClick = { onNavigate("interventions") })
+                            ModernMenuCard(title = "Zones", icon = Icons.Default.LocationOn, onClick = { onNavigate("zones") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Techniciens", icon = Icons.Default.Engineering, onClick = { onNavigate("technicians") })
+                            ModernMenuCard(title = "Citoyens", icon = Icons.Default.People, onClick = { onNavigate("citizens") })
+                        }
+                    } else if (role == UserRole.TECHNICIAN) {
+                        // Technician Mesh
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Interventions", icon = Icons.Default.Build, badgeCount = 3, onClick = { onNavigate("interventions") })
+                            ModernMenuCard(title = "Réclamations", icon = Icons.Default.Warning, badgeCount = 5, onClick = { onNavigate("reclamations") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Zones", icon = Icons.Default.Map, onClick = { onNavigate("zones") })
+                            ModernMenuCard(title = "Lampadaires", icon = Icons.Default.LightMode, onClick = { onNavigate("streetlights") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                             ModernMenuCard(title = "Capteurs", icon = Icons.Default.Sensors, onClick = { onNavigate("sensors") })
+                             ModernMenuCard(title = "Caméras", icon = Icons.Default.Videocam, onClick = { onNavigate("cameras") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                             ModernMenuCard(title = "Événements", icon = Icons.Default.Event, onClick = { onNavigate("cultural_events") })
+                             ModernMenuCard(title = "Programmes", icon = Icons.Default.SettingsSuggest, onClick = { onNavigate("lighting_programs") })
+                        }
+                    } else {
+                        // Citizen Mesh
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Problème ?", icon = Icons.Default.ReportProblem, onClick = { onNavigate("add_reclamation") })
+                            ModernMenuCard(title = "Ma Ville", icon = Icons.Default.Map, onClick = { onNavigate("zones") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Événements", icon = Icons.Default.Event, onClick = { onNavigate("cultural_events") })
+                            ModernMenuCard(title = "Éclairage", icon = Icons.Default.SettingsSuggest, onClick = { onNavigate("lighting_programs") })
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            ModernMenuCard(title = "Map", icon = Icons.Default.LightMode, onClick = { onNavigate("streetlights") })
+                            ModernMenuCard(title = "Historique", icon = Icons.Default.History, onClick = { onNavigate("history") })
+                        }
                     }
                 }
             }
@@ -211,7 +255,8 @@ private fun RowScope.ModernStatusCard(
 private fun RowScope.ModernMenuCard(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    badgeCount: Int = 0
+    badgeCount: Int = 0,
+    onClick: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -226,7 +271,7 @@ private fun RowScope.ModernMenuCard(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         interactionSource = interactionSource,
-        onClick = { /* À implémenter : navigation vers l'écran correspondant */ }
+        onClick = onClick
     ) {
         Box(
             modifier = Modifier

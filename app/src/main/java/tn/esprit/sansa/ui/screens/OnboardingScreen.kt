@@ -25,10 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.R
 import tn.esprit.sansa.ui.theme.SansaTheme
+import tn.esprit.sansa.ui.theme.*
 
-// Couleurs principales (seulement pour les accents)
-private val NoorBlue = Color(0xFF1E40AF)
-
+// Palette Noor centralisée
 // Définition des pages (images à ajouter dans res/drawable)
 data class OnboardingPage(
     val title: String,

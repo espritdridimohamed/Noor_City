@@ -21,12 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import tn.esprit.sansa.ui.theme.SansaTheme
-
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val LightBlue = Color(0xFFEFF6FF)
-private val LightGreen = Color(0xFFECFDF5)
+import tn.esprit.sansa.ui.theme.*
+// Palette Noor centralisée
 
 enum class UserType { CITOYEN, TECHNICIEN }
 

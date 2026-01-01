@@ -1,8 +1,8 @@
-// AddStreetlightScreen.kt – Ajout de lampadaire avec design Noor
 package tn.esprit.sansa.ui.screens
 
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,51 +22,46 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import tn.esprit.sansa.ui.theme.SansaTheme
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.viewmodels.StreetlightsViewModel
+import tn.esprit.sansa.ui.components.ModernSectionCard
+import androidx.compose.ui.graphics.toArgb
+import android.webkit.JavascriptInterface
 
-// Palette Noor
-private val NoorBlue = Color(0xFF1E40AF)
-private val NoorGreen = Color(0xFF10B981)
-private val NoorAmber = Color(0xFFF59E0B)
-private val NoorRed = Color(0xFFEF4444)
-private val NoorPurple = Color(0xFF8B5CF6)
+import tn.esprit.sansa.ui.theme.*
+import tn.esprit.sansa.ui.utils.QRCodeGenerator
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddStreetlightScreen(
+    viewModel: StreetlightsViewModel = viewModel(),
     onAddSuccess: () -> Unit = {},
     onBackPressed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var streetlightId by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var latitude by remember { mutableStateOf("") }
-    var longitude by remember { mutableStateOf("") }
+    var selectedZone by remember { mutableStateOf<Zone?>(null) }
+    var latitude by remember { mutableStateOf(36.8065) }
+    var longitude by remember { mutableStateOf(10.1815) }
     var bulbType by remember { mutableStateOf(BulbType.LED) }
-    var status by remember { mutableStateOf(StreetlightStatus.OFF) }
-    var powerConsumption by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf(StreetlightStatus.ON) }
+    var powerConsumption by remember { mutableStateOf("45") }
     var installationDate by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var showQRDialog by remember { mutableStateOf(false) }
+    var generatedQRBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
-    // Suggestions d'adresses communes à Tunis
-    val addressSuggestions = listOf(
-        "Avenue Habib Bourguiba",
-        "Avenue de la Liberté",
-        "Avenue Mohammed V",
-        "Boulevard du 7 Novembre",
-        "Rue de Carthage",
-        "Avenue de France"
-    )
-
-    // Suggestions de zones
-    val zoneSuggestions = listOf(
-        "Zone A - Centre Ville",
-        "Zone B - Quartier Nord",
-        "Zone C - Quartier Sud",
-        "Zone D - Quartier Est",
-        "Zone E - Quartier Ouest"
-    )
+    val zones by viewModel.zones.collectAsState()
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -84,341 +79,322 @@ fun AddStreetlightScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ID du lampadaire
+            // General Info
             item {
-                Text("Identifiant", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = streetlightId,
-                    onValueChange = { streetlightId = it.uppercase() },
-                    label = { Text("ID du lampadaire (ex: L001)") },
-                    leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    ),
-                    supportingText = {
-                        Text("Format recommandé: L + 3 chiffres", color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-                    }
-                )
-            }
-
-            // Type d'ampoule
-            item {
-                Text("Type d'ampoule", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(BulbType.entries) { type ->
-                        FilterChip(
-                            onClick = { bulbType = type },
-                            label = {
-                                Text(type.displayName, fontSize = 13.sp)
-                            },
-                            selected = bulbType == type,
-                            leadingIcon = if (bulbType == type) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = NoorBlue,
-                                selectedLabelColor = Color.White,
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                labelColor = NoorBlue
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Statut initial
-            item {
-                Text("Statut initial", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(StreetlightStatus.entries) { currentStatus ->
-                        FilterChip(
-                            onClick = { status = currentStatus },
-                            label = {
-                                Text(currentStatus.displayName, fontSize = 13.sp)
-                            },
-                            selected = status == currentStatus,
-                            leadingIcon = if (status == currentStatus) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = currentStatus.color,
-                                selectedLabelColor = Color.White,
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                labelColor = currentStatus.color
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Adresse
-            item {
-                Text("Adresse", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("Adresse complète") },
-                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    )
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("Suggestions rapides :", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(addressSuggestions) { suggestion ->
-                        SuggestionChip(
-                            onClick = { address = suggestion },
-                            label = { Text(suggestion, fontSize = 12.sp) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = NoorBlue.copy(alpha = 0.1f),
-                                labelColor = NoorBlue
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Zone/Localisation
-            item {
-                Text("Zone / Secteur", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = location,
-                    onValueChange = { location = it },
-                    label = { Text("Zone géographique") },
-                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    )
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(zoneSuggestions) { suggestion ->
-                        SuggestionChip(
-                            onClick = { location = suggestion },
-                            label = { Text(suggestion, fontSize = 12.sp) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = NoorGreen.copy(alpha = 0.1f),
-                                labelColor = NoorGreen
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Coordonnées GPS
-            item {
-                Text("Coordonnées GPS", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ModernSectionCard(title = "Informations Générales", icon = Icons.Default.Info) {
                     OutlinedTextField(
-                        value = latitude,
-                        onValueChange = {
-                            if (it.isEmpty() || it.matches(Regex("^-?\\d*\\.?\\d*$"))) {
-                                latitude = it
-                            }
-                        },
-                        label = { Text("Latitude") },
-                        leadingIcon = { Icon(Icons.Default.MyLocation, contentDescription = null) },
-                        modifier = Modifier.weight(1f),
+                        value = streetlightId,
+                        onValueChange = { streetlightId = it.uppercase() },
+                        label = { Text("ID du lampadaire (ex: L001)") },
+                        leadingIcon = { Icon(Icons.Default.Tag, null) },
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NoorBlue,
-                            cursorColor = NoorBlue
-                        ),
-                        placeholder = { Text("36.8065", fontSize = 12.sp) }
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue)
                     )
-                    OutlinedTextField(
-                        value = longitude,
-                        onValueChange = {
-                            if (it.isEmpty() || it.matches(Regex("^-?\\d*\\.?\\d*$"))) {
-                                longitude = it
-                            }
-                        },
-                        label = { Text("Longitude") },
-                        leadingIcon = { Icon(Icons.Default.MyLocation, contentDescription = null) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NoorBlue,
-                            cursorColor = NoorBlue
-                        ),
-                        placeholder = { Text("10.1815", fontSize = 12.sp) }
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        "Tunis centre: ~36.806, 10.181",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(0.5f)
-                    )
-                    TextButton(onClick = { /* TODO: Obtenir position GPS */ }) {
-                        Icon(Icons.Default.GpsFixed, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Ma position", fontSize = 12.sp)
-                    }
-                }
-            }
-
-            // Consommation électrique
-            item {
-                Text("Consommation électrique", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = powerConsumption,
-                    onValueChange = {
-                        if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d*$"))) {
-                            powerConsumption = it
-                        }
-                    },
-                    label = { Text("Puissance (Watts)") },
-                    leadingIcon = { Icon(Icons.Default.Power, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    ),
-                    supportingText = {
-                        val consumption = powerConsumption.toDoubleOrNull() ?: 0.0
-                        val recommendation = when {
-                            consumption == 0.0 -> ""
-                            consumption < 50 -> "Très efficace (LED)"
-                            consumption < 100 -> "Efficace"
-                            consumption < 150 -> "Moyen"
-                            else -> "Élevé - Envisager LED"
-                        }
-                        if (recommendation.isNotEmpty()) {
-                            Text(
-                                recommendation,
-                                color = when {
-                                    consumption < 50 -> NoorGreen
-                                    consumption < 100 -> NoorBlue
-                                    consumption < 150 -> NoorAmber
-                                    else -> NoorRed
-                                }
+                    
+                    Spacer(Modifier.height(16.dp))
+                    Text("Type d'ampoule", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                        items(BulbType.entries) { type ->
+                            FilterChip(
+                                onClick = { bulbType = type },
+                                label = { Text(type.displayName) },
+                                selected = bulbType == type,
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = NoorBlue, selectedLabelColor = Color.White)
                             )
                         }
                     }
-                )
-            }
 
-            // Date d'installation
-            item {
-                Text("Date d'installation (optionnel)", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = installationDate,
-                    onValueChange = { installationDate = it },
-                    label = { Text("JJ/MM/AAAA") },
-                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    placeholder = { Text("28/12/2024") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    )
-                )
-            }
-
-            // Notes additionnelles
-            item {
-                Text("Notes additionnelles (optionnel)", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Informations complémentaires") },
-                    leadingIcon = { Icon(Icons.Default.Note, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        cursorColor = NoorBlue
-                    ),
-                    placeholder = { Text("Ex: Proximité d'une école, horaires spéciaux...") }
-                )
-            }
-
-            // Bouton de soumission
-            item {
-                Spacer(Modifier.height(8.dp))
-
-                // Résumé avant validation
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = NoorBlue.copy(alpha = 0.05f)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Résumé", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = NoorBlue)
-                        Spacer(Modifier.height(8.dp))
-                        if (streetlightId.isNotEmpty()) {
-                            Text("• ID: $streetlightId", fontSize = 12.sp)
-                        }
-                        if (address.isNotEmpty()) {
-                            Text("• Adresse: $address", fontSize = 12.sp)
-                        }
-                        Text("• Type: ${bulbType.displayName}", fontSize = 12.sp)
-                        Text("• Statut: ${status.displayName}", fontSize = 12.sp)
-                        if (powerConsumption.isNotEmpty()) {
-                            Text("• Consommation: ${powerConsumption}W", fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Statut", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                        items(StreetlightStatus.entries) { s ->
+                            FilterChip(
+                                onClick = { status = s },
+                                label = { Text(s.displayName) },
+                                selected = status == s,
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = s.color, selectedLabelColor = Color.White)
+                            )
                         }
                     }
                 }
+            }
 
-                Spacer(Modifier.height(16.dp))
+            // Zone & Map
+            item {
+                ModernSectionCard(title = "Zone & Localisation", icon = Icons.Default.Map) {
+                    Text("1. Choisir la zone", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                        items(zones) { zone ->
+                            FilterChip(
+                                onClick = { 
+                                    selectedZone = zone 
+                                    latitude = zone.latitude
+                                    longitude = zone.longitude
+                                },
+                                label = { Text(zone.name) },
+                                selected = selectedZone?.id == zone.id,
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = NoorIndigo, selectedLabelColor = Color.White)
+                            )
+                        }
+                    }
 
+                    Spacer(Modifier.height(16.dp))
+                    Text("2. Marquer l'emplacement exact", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    
+                    StreetlightMarkingMap(
+                        lat = latitude,
+                        lng = longitude,
+                        statusColor = status.color,
+                        onLocationChanged = { lat, lng ->
+                            latitude = lat
+                            longitude = lng
+                        }
+                    )
+                    
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Lat: ${String.format("%.5f", latitude)}", fontSize = 11.sp, color = NoorBlue)
+                        Text("Lon: ${String.format("%.5f", longitude)}", fontSize = 11.sp, color = NoorBlue)
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        label = { Text("Adresse précise") },
+                        leadingIcon = { Icon(Icons.Default.Home, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+
+            // Consumption & Extra
+            item {
+                ModernSectionCard(title = "Détails Techniques", icon = Icons.Default.Settings) {
+                    OutlinedTextField(
+                        value = powerConsumption,
+                        onValueChange = { powerConsumption = it },
+                        label = { Text("Consommation (Watts)") },
+                        leadingIcon = { Icon(Icons.Default.Power, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes (optionnel)") },
+                        leadingIcon = { Icon(Icons.Default.Note, null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+
+            // Submit
+            item {
                 Button(
                     onClick = {
-                        // TODO: Validation et enregistrement
-                        onAddSuccess()
+                        val light = Streetlight(
+                            id = streetlightId,
+                            bulbType = bulbType,
+                            status = status,
+                            zoneId = selectedZone?.id ?: "",
+                            latitude = latitude,
+                            longitude = longitude,
+                            powerConsumption = powerConsumption.toDoubleOrNull() ?: 0.0,
+                            address = address,
+                            lastMaintenance = System.currentTimeMillis(),
+                            installDate = System.currentTimeMillis()
+                        )
+                        viewModel.addStreetlight(light) { success ->
+                            if (success) {
+                                generatedQRBitmap = QRCodeGenerator.generateQRCode(streetlightId)
+                                showQRDialog = true
+                            }
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(60.dp),
-                    enabled = streetlightId.isNotBlank() &&
-                            address.isNotBlank() &&
-                            location.isNotBlank() &&
-                            latitude.isNotBlank() &&
-                            longitude.isNotBlank() &&
-                            powerConsumption.isNotBlank(),
-                    shape = RoundedCornerShape(30.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NoorGreen)
+                        .height(64.dp),
+                    enabled = streetlightId.isNotBlank() && selectedZone != null && address.isNotBlank(),
+                    shape = RoundedCornerShape(32.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
+                    Icon(Icons.Default.Save, null)
                     Spacer(Modifier.width(12.dp))
-                    Text("Ajouter le lampadaire", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Enregistrer le lampadaire", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             item { Spacer(Modifier.height(100.dp)) }
         }
+
+        if (showQRDialog && generatedQRBitmap != null) {
+            AlertDialog(
+                onDismissRequest = { 
+                    showQRDialog = false 
+                    onAddSuccess()
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { 
+                            showQRDialog = false 
+                            onAddSuccess()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo)
+                    ) {
+                        Text("Terminer", color = Color.White)
+                    }
+                },
+                title = {
+                    Text("Lampadaire Ajouté !", fontWeight = FontWeight.Bold, color = NoorIndigo)
+                },
+                text = {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Voici le QR Code unique généré pour ce lampadaire. Les citoyens pourront le scanner pour signaler des pannes ou pannes.", 
+                            fontSize = 14.sp, 
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(240.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.White)
+                                .padding(12.dp)
+                                .border(1.dp, Color.LightGray, RoundedCornerShape(20.dp))
+                        ) {
+                            Image(
+                                bitmap = generatedQRBitmap!!.asImageBitmap(),
+                                contentDescription = "QR Code",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(streetlightId, fontWeight = FontWeight.Black, fontSize = 24.sp, color = NoorIndigo)
+                    }
+                },
+                shape = RoundedCornerShape(28.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp
+            )
+        }
     }
 }
 
 @Composable
-private fun AddStreetlightTopBar(
-    onBackPressed: () -> Unit
+fun StreetlightMarkingMap(
+    lat: Double,
+    lng: Double,
+    statusColor: Color,
+    onLocationChanged: (Double, Double) -> Unit
 ) {
+    val hexColor = String.format("#%06X", (0xFFFFFF and statusColor.toArgb()))
+    
+    val html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <style>
+                #map { height: 100vh; width: 100vw; margin: 0; padding: 0; }
+                .marker-icon {
+                    width: 14px; height: 14px;
+                    border-radius: 50%;
+                    border: 2px solid white;
+                    box-shadow: 0 0 5px rgba(0,0,0,0.3);
+                }
+                .leaflet-container { background: #f0f2f5; }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                var map = L.map('map').setView([$lat, $lng], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                
+                var icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: '<div class="marker-icon" style="background-color: $hexColor"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                });
+
+                var marker = L.marker([$lat, $lng], {icon: icon, draggable: true}).addTo(map);
+                
+                marker.on('dragend', function(e) {
+                    var pos = marker.getLatLng();
+                    if (window.Android && window.Android.onLocationPicked) {
+                        window.Android.onLocationPicked(pos.lat, pos.lng);
+                    }
+                });
+
+                map.on('click', function(e) {
+                    marker.setLatLng(e.latlng);
+                    if (window.Android && window.Android.onLocationPicked) {
+                        window.Android.onLocationPicked(e.latlng.lat, e.latlng.lng);
+                    }
+                });
+
+                function updateMarker(newLat, newLng, newColor) {
+                    map.setView([newLat, newLng]);
+                    marker.setLatLng([newLat, newLng]);
+                    var newIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: '<div class="marker-icon" style="background-color: ' + newColor + '"></div>',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
+                    });
+                    marker.setIcon(newIcon);
+                }
+            </script>
+        </body>
+        </html>
+    """.trimIndent()
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                webViewClient = WebViewClient()
+                settings.javaScriptEnabled = true
+                addJavascriptInterface(object {
+                    @JavascriptInterface
+                    fun onLocationPicked(lat: Double, lng: Double) {
+                        onLocationChanged(lat, lng)
+                    }
+                }, "Android")
+                loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(250.dp)
+            .clip(RoundedCornerShape(16.dp)),
+        update = { webView ->
+            webView.loadUrl("javascript:updateMarker($lat, $lng, '$hexColor')")
+        }
+    )
+}
+
+@Composable
+private fun AddStreetlightTopBar(onBackPressed: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -430,10 +406,7 @@ private fun AddStreetlightTopBar(
             )
             .padding(horizontal = 24.dp, vertical = 56.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
                 onClick = onBackPressed,
                 modifier = Modifier
@@ -441,17 +414,10 @@ private fun AddStreetlightTopBar(
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White.copy(alpha = 0.2f))
             ) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Retour",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+                Icon(Icons.Default.ArrowBack, "Retour", tint = Color.White)
             }
-
             Spacer(Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Text("Nouveau lampadaire", color = Color.White.copy(0.9f), fontSize = 16.sp)
                 Text("Ajout au réseau", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
             }

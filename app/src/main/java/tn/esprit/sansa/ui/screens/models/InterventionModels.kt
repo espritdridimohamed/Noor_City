@@ -1,5 +1,4 @@
-// InterventionModels.kt - Modèles pour les interventions
-package tn.esprit.sansa.models
+package tn.esprit.sansa.ui.screens.models
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -38,7 +37,7 @@ data class Intervention(
     val streetlightId: String = "",
     val technicianName: String = "",
     val type: InterventionType = InterventionType.MAINTENANCE,
-    val date: String = "",
+    val date: Long = 0L,
     val status: InterventionStatus = InterventionStatus.SCHEDULED,
     val location: String = "",
     val description: String = "",
