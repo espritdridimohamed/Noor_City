@@ -62,30 +62,96 @@ void setup() {
   Firebase.reconnectWiFi(true);
 }
 
+// --- TINYML MODEL (Exported from Python) ---
+// 0=Safe, 1=Caution, 2=Danger, 3=Extreme
+int predictHeatRisk(float t, float h) {
+    if (t < 26.7) return 0; // SAFE
+
+    if (t < 30.0) {
+        if (h < 60) return 0; // SAFE
+        else return 1;        // CAUTION
+    }
+
+    if (t < 35.0) {
+        if (h < 35) return 0; // SAFE
+        if (h < 65) return 1; // CAUTION
+        return 2;             // DANGER
+    }
+
+    if (t < 40.0) {
+        if (h < 25) return 1; // CAUTION
+        if (h < 55) return 2; // DANGER
+        return 3;             // EXTREME
+    }
+
+    // t >= 40.0
+    if (h < 20) return 2;     // DANGER
+    return 3;                 // EXTREME
+}
+
+// Formule Rothfusz (Heat Index Value)
+float calculateHeatIndexValue(float T, float RH) {
+    if (T < 26.7) return T;
+    float Tf = (T * 1.8) + 32;
+    float HI = -42.379 + 2.04901523*Tf + 10.14333127*RH - .22475541*Tf*RH \
+         - .00683783*Tf*Tf - .05481717*RH*RH + .00122874*Tf*Tf*RH \
+         + .00085282*Tf*RH*RH - .00000199*Tf*Tf*RH*RH;
+    return (HI - 32) / 1.8;
+}
+
+// Variables pour la simulation (Demo Mode)
+float simTemp = 28.0;
+float simHum = 50.0;
+bool simDirectionUp = true;
+
 void loop() {
-  if (millis() - sendDataPrevMillis > 10000 || sendDataPrevMillis == 0) {
+  if (millis() - sendDataPrevMillis > 5000 || sendDataPrevMillis == 0) { // Update every 5s for demo
     sendDataPrevMillis = millis();
 
+    // 1. Lecture Réelle (Si capteur connecté)
     float t = dht.readTemperature();
     float h = dht.readHumidity();
 
-    if (isnan(t) || isnan(h)) {
-      Serial.println("Failed to read from DHT sensor!");
-      return;
+    // 2. SIMULATION vs RÉEL
+    // Si la lecture échoue (isnan), on passe en simulation pour éviter de planter
+    // SINON, on utilise les vraies valeurs du capteur DHT11 (Branché sur GPIO 14)
+    if (isnan(t) || isnan(h)) { 
+       Serial.println("⚠️ Erreur capteur ! Passage en mode Simulation...");
+       
+       // Variation lente pour simuler une journée qui chauffe
+       if (simDirectionUp) {
+          simTemp += 0.5;
+          simHum += 2.0;
+          if (simTemp > 38.0) simDirectionUp = false;
+       } else {
+          simTemp -= 0.5;
+          simHum -= 2.0;
+          if (simTemp < 25.0) simDirectionUp = true;
+       }
+       t = simTemp;
+       h = simHum;
     }
 
-    Serial.printf("ID: %s | Temp: %.1f°C\n", SENSOR_ID.c_str(), t);
+    // 3. TinyML Inference
+    int riskLevel = predictHeatRisk(t, h);
+    float heatIndex = calculateHeatIndexValue(t, h);
 
-    // On envoie UNIQUEMENT les données dynamiques
-    // Le nom (streetlightName) est géré dans l'App Sansa
+    Serial.printf("ID: %s | Temp: %.1f°C | Hum: %.1f%% | HeatIndex: %.1f°C | Risk: %d\n", 
+                  SENSOR_ID.c_str(), t, h, heatIndex, riskLevel);
+
     String path = "/sensors/" + SENSOR_ID;
     
     FirebaseJson updateData;
-    updateData.add("value", String(t, 1));
+    updateData.add("temperature", t); // Send raw float
+    updateData.add("humidity", h);
+    updateData.add("heatIndex", heatIndex); // AI Calculated
+    updateData.add("riskLevel", riskLevel); // AI Predicted class
+    updateData.add("lastUpdate", millis());
     updateData.add("status", "ACTIVE");
-    updateData.add("battery", 98); // Simulation niveau batterie
+    
+    // Legacy value for simple display
+    updateData.add("value", String(t, 1));
 
-    // On utilise .updateNode pour ne pas effacer le nom ou le type mis dans l'App
     if (Firebase.updateNode(fbdo, path, updateData)) {
       Serial.println("Envoi réussi vers Firebase.");
     } else {

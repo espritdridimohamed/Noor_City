@@ -42,7 +42,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
 import tn.esprit.sansa.ui.components.EmptyState
 import tn.esprit.sansa.ui.components.StaggeredItem
 import tn.esprit.sansa.ui.screens.models.UserRole
@@ -242,7 +242,7 @@ private fun CulturalEventsContent(
                 ) { index, event ->
                     StaggeredItem(index = index) {
                         Box {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = event,
                                 onDelete = { onDeleteEvent(event) }
                             ) { item ->

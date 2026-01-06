@@ -87,6 +87,19 @@ fun ProfileScreen(
                 }
             }
 
+            // Alert pour profil incomplet (Techniciens seulement)
+            if (account.role == UserRole.TECHNICIAN && 
+                (account.phoneNumber.isBlank() || account.workingZone.isBlank())) {
+                item {
+                    StaggeredEntry(delayMillis = 100) {
+                        ProfileIncompleteAlert(
+                            missingPhone = account.phoneNumber.isBlank(),
+                            missingZone = account.workingZone.isBlank()
+                        )
+                    }
+                }
+            }
+
             // Stats Cards
             item {
                 StaggeredEntry(delayMillis = 150) {
@@ -301,6 +314,71 @@ private fun ProfileHeader(account: UserAccount) {
 }
 
 @Composable
+private fun ProfileIncompleteAlert(
+    missingPhone: Boolean,
+    missingZone: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = NoorAmber.copy(alpha = 0.15f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(2.dp, NoorAmber)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = NoorAmber,
+                modifier = Modifier.size(28.dp)
+            )
+            
+            Spacer(Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Profil incomplet",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NoorAmber
+                )
+                
+                Spacer(Modifier.height(4.dp))
+                
+                val missingItems = buildList {
+                    if (missingPhone) add("numéro de téléphone")
+                    if (missingZone) add("zone de travail")
+                }
+                
+                Text(
+                    text = "Veuillez compléter votre ${missingItems.joinToString(" et ")} pour activer toutes les fonctionnalités.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    lineHeight = 20.sp
+                )
+                
+                Spacer(Modifier.height(8.dp))
+                
+                Text(
+                    text = "👇 Faites défiler vers le bas pour compléter vos informations",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = NoorAmber
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProfileStats(stats: Map<String, String>, accentColor: Color) {
     Row(
         modifier = Modifier
@@ -374,9 +452,14 @@ private fun ProfileInfoSection(account: UserAccount, bio: String) {
         if (account.role == UserRole.TECHNICIAN) {
             Spacer(Modifier.height(16.dp))
             InfoItem(Icons.Outlined.Badge, "Spécialité", account.specialty ?: "Général")
-            Spacer(Modifier.height(16.dp))
-            InfoItem(Icons.Outlined.LocationOn, "Zone de travail", if (account.workingZone.isNotEmpty()) account.workingZone else "Non assignée")
         }
+
+        Spacer(Modifier.height(16.dp))
+        InfoItem(
+            Icons.Outlined.LocationOn, 
+            "Ma Zone", 
+            if (account.workingZone.isNotEmpty()) account.workingZone else "Non assignée"
+        )
 
         Spacer(Modifier.height(16.dp))
         InfoItem(
@@ -385,10 +468,6 @@ private fun ProfileInfoSection(account: UserAccount, bio: String) {
             if (account.phoneNumber.isNotEmpty()) account.phoneNumber else "Non renseigné"
         )
 
-        Spacer(Modifier.height(16.dp))
-        val coords = if (account.coordinates.isNotEmpty()) account.coordinates else "Non renseignées"
-        InfoItem(Icons.Outlined.LocationOn, "Coordonnées GPS", coords)
-        
         Spacer(Modifier.height(16.dp))
         InfoItem(Icons.Outlined.Event, "Membre depuis", formatDate(account.createdAt))
     }

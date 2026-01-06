@@ -53,9 +53,33 @@ class StreetlightsViewModel : ViewModel() {
         }
     }
 
+    fun updateStreetlight(streetlight: Streetlight, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            streetlightRepository.addStreetlight(streetlight, onComplete)
+        }
+    }
+
     fun deleteStreetlight(id: String) {
         viewModelScope.launch {
             streetlightRepository.deleteStreetlight(id) { }
         }
+    }
+
+    fun getStreetlightById(id: String): Streetlight? {
+        return _streetlights.value.find { it.id == id }
+    }
+
+    /**
+     * Generate next sequential streetlight ID (format: L001, L002, etc.)
+     */
+    suspend fun generateNextStreetlightId(): String {
+        // Fetch fresh data from Firebase to ensure we have the latest IDs
+        val allStreetlights = streetlightRepository.getAllStreetlightsOnce()
+        val existingIds = allStreetlights
+            .mapNotNull { it.id.removePrefix("L").toIntOrNull() }
+            .maxOrNull() ?: 0
+        
+        val nextNumber = existingIds + 1
+        return "L${nextNumber.toString().padStart(3, '0')}"
     }
 }

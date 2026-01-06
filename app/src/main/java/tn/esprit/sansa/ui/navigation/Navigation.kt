@@ -34,6 +34,9 @@ import tn.esprit.sansa.ui.utils.Sansa
 import tn.esprit.sansa.ui.viewmodels.*
 import tn.esprit.sansa.ui.screens.models.UserRole
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import tn.esprit.sansa.ui.theme.NoorBlue
 
 sealed class Screen(
     val route: String,
@@ -63,9 +66,13 @@ sealed class Screen(
     object AddZone            : Screen("add_zone", "", Icons.Default.AddCircle)
     object AddSensor          : Screen("add_sensor", "", Icons.Default.AddCircle)
 
+    object EditStreetlight    : Screen("edit_streetlight/{streetlightId}", "Modifier Lampadaire", Icons.Default.Edit)
+
     object Home    : Screen("home", "Accueil", Icons.Default.Home)
     object History : Screen("history", "Historique", Icons.Default.History)
     object Settings: Screen("settings", "Paramètres", Icons.Default.Settings)
+    object Chat : Screen("chat/{targetId}/{targetName}", "Chat", Icons.Default.Chat)
+    object UsersList : Screen("users_list", "Contacts", Icons.Default.Contacts)
     object ProfileTechnician : Screen("profile_technician", "Profil Technicien", Icons.Default.Person)
     object ProfileCitizen : Screen("profile_citizen", "Profil Citoyen", Icons.Default.Person)
 
@@ -77,7 +84,8 @@ sealed class Screen(
     object Register          : Screen("register", "Inscription", Icons.Default.PersonAdd)
     object ForgotPassword   : Screen("forgot_password", "Récupération", Icons.Default.LockReset)
     object AdminTechMgmt    : Screen("admin_tech_mgmt", "Gestion Tech", Icons.Default.AdminPanelSettings)
-    object TechOnboarding   : Screen("tech_onboarding", "Onboarding", Icons.Outlined.RocketLaunch)
+    object TechWelcome      : Screen("tech_welcome", "Bienvenue Technicien", Icons.Default.Dashboard)
+    object Onboarding       : Screen("onboarding", "Bienvenue", Icons.Default.Star)
 }
 
 private val NoorIndigo = Color(0xFF4F46E5)
@@ -96,8 +104,13 @@ fun ModernBottomBar(
             Screen.Streetlights to "Lampadaires",
             Screen.Cameras to "Caméras",
             Screen.Technicians to strings.technicians,
-            Screen.Citizens to strings.citizens,
-            Screen.Reclamations to strings.reclamations
+            Screen.UsersList to "Chat"
+        )
+        UserRole.TECHNICIAN -> listOf(
+            Screen.Streetlights to "Lampes",
+            Screen.LightingPrograms to "Programmes",
+            Screen.Interventions to "Interventions",
+            Screen.UsersList to "Chat"
         )
         else -> listOf(
             Screen.Streetlights to "Lampes",
@@ -190,6 +203,8 @@ fun SecondaryFeaturesBottomSheet(
     
     val secondaryItems = when (role) {
         UserRole.ADMIN -> listOf(
+            Screen.Citizens to strings.citizens,
+            Screen.Reclamations to strings.reclamations,
             Screen.Zones to "Zones",
             Screen.Interventions to "Interventions",
             Screen.CulturalEvents to "Événements",
@@ -197,6 +212,13 @@ fun SecondaryFeaturesBottomSheet(
             Screen.Sensors to "Capteurs",
             Screen.Settings to strings.settings,
             Screen.AdminTechMgmt to "Administration"
+        )
+        UserRole.TECHNICIAN -> listOf(
+            Screen.CulturalEvents to "Événements",
+            Screen.Zones to "Zones",
+            Screen.Sensors to "Capteurs",
+            Screen.ProfileTechnician to "Mon Profil",
+            Screen.Settings to strings.settings
         )
         else -> listOf(
             Screen.ProfileCitizen to "Mon Profil",
@@ -280,10 +302,16 @@ fun AppNavigationWithModernBar(
     val sensorsViewModel: SensorsViewModel = viewModel()
     val camerasViewModel: CamerasViewModel = viewModel()
     val culturalEventsViewModel: CulturalEventsViewModel = viewModel()
+    val chatViewModel: ChatViewModel = viewModel()
     var showSecondarySheet by remember { mutableStateOf(false) }
+    
+    val adminDashboardViewModel: AdminDashboardViewModel = viewModel()
     
     val authState by authViewModel.authState.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val currentRoute = currentDestination?.route
 
     if (showSecondarySheet) {
         SecondaryFeaturesBottomSheet(
@@ -296,7 +324,15 @@ fun AppNavigationWithModernBar(
     Scaffold(
         modifier = modifier,
         bottomBar = {
-            if (authState is AuthState.Authenticated) {
+            val authScreens = listOf(
+                Screen.Login.route,
+                Screen.Register.route,
+                Screen.ForgotPassword.route,
+                Screen.Onboarding.route
+            )
+            if (authState is AuthState.Authenticated && 
+                currentRoute !in authScreens
+            ) {
                 ModernBottomBar(
                     navController = navController,
                     onShowSecondarySheet = { showSecondarySheet = true },
@@ -305,27 +341,56 @@ fun AppNavigationWithModernBar(
             }
         }
     ) { innerPadding ->
+        val context = LocalContext.current
+        
+        // Empêcher l'affichage du NavHost tant que la session n'est pas vérifiée (Idle)
+        if (authState is AuthState.Idle) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = NoorBlue)
+            }
+            return@Scaffold
+        }
+
+        // L'utilisateur souhaite voir l'onboarding à chaque lancement
+        val startDest = Screen.Onboarding.route
+
         NavHost(
             navController = navController,
-            startDestination = if (authState is AuthState.Authenticated) Screen.Home.route else Screen.Login.route,
+            startDestination = startDest,
             modifier = Modifier.padding(innerPadding)
         ) {
+            // New Onboarding Route (General Slides)
+            composable(Screen.Onboarding.route) {
+                OnboardingScreen(
+                    onLoginClick = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             // Auth Flow
             composable(Screen.Login.route) {
                 LoginScreen(
                     onLoginSuccess = {
-                        val destination = when {
-                            currentUser?.role == UserRole.ADMIN -> Screen.Streetlights.route 
-                            currentUser?.role == UserRole.TECHNICIAN && currentUser?.isFirstLogin == true -> Screen.TechOnboarding.route
-                            else -> Screen.Home.route
-                        }
-                        navController.navigate(destination) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
+                        if (authState is AuthState.Authenticated) {
+                            val user = (authState as AuthState.Authenticated).user
+                            if (user.role == UserRole.TECHNICIAN && user.isFirstLogin) {
+                                navController.navigate(Screen.TechWelcome.route) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(Screen.Login.route) { inclusive = true }
+                                }
+                            }
                         }
                     },
                     onNavigateToRegister = { navController.navigate(Screen.Register.route) },
                     onNavigateToForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
-                    viewModel = authViewModel
+                    viewModel = authViewModel,
+                    allowAutoLogin = false
                 )
             }
             composable(Screen.Register.route) {
@@ -348,11 +413,13 @@ fun AppNavigationWithModernBar(
                     viewModel = authViewModel
                 )
             }
-            composable(Screen.TechOnboarding.route) {
-                TechOnboardingScreen(
+            // Welcome for Technician (New)
+            composable(Screen.TechWelcome.route) {
+                TechnicianWelcomeScreen(
+                    onNavigate = { route -> navController.navigate(route) },
                     onOnboardingComplete = {
                         navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.TechOnboarding.route) { inclusive = true }
+                            popUpTo(Screen.TechWelcome.route) { inclusive = true }
                         }
                     },
                     authViewModel = authViewModel
@@ -363,6 +430,9 @@ fun AppNavigationWithModernBar(
                 StreetlightsMapScreen(
                     onNavigateToAddStreetlight = {
                         navController.navigate(Screen.AddStreetlight.route)
+                    },
+                    onNavigateToEditStreetlight = { id ->
+                        navController.navigate("edit_streetlight/$id")
                     },
                     role = currentUser?.role
                 )
@@ -389,7 +459,9 @@ fun AppNavigationWithModernBar(
                     onNavigateToProfile = { navController.navigate(Screen.ProfileCitizen.route) }
                 )
             }
-            composable(Screen.Reclamations.route) { ReclamationsScreen() }
+            composable(Screen.Reclamations.route) { 
+                ReclamationsScreen(currentUser = currentUser) 
+            }
 
             composable(Screen.Zones.route) { 
                 ZonesScreen(role = currentUser?.role) 
@@ -432,6 +504,18 @@ fun AppNavigationWithModernBar(
                 )
             }
 
+            composable(
+                route = Screen.EditStreetlight.route,
+                arguments = listOf(androidx.navigation.navArgument("streetlightId") { type = androidx.navigation.NavType.StringType })
+            ) { backStackEntry ->
+                val streetlightId = backStackEntry.arguments?.getString("streetlightId")
+                AddStreetlightScreen(
+                    editingStreetlightId = streetlightId,
+                    onAddSuccess = { navController.popBackStack() },
+                    onBackPressed = { navController.popBackStack() }
+                )
+            }
+
             composable(Screen.AddLightingProgram.route) {
                 AddLightingProgramScreen(
                     onAddSuccess = { navController.popBackStack() },
@@ -454,7 +538,11 @@ fun AppNavigationWithModernBar(
                 Text("Ajout citoyen - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
             }
             composable(Screen.AddReclamation.route) {
-                AddReclamationScreen(onAddSuccess = { navController.popBackStack() }, onBackPressed = { navController.popBackStack() })
+                AddReclamationScreen(
+                    onAddSuccess = { navController.popBackStack() },
+                    onBackPressed = { navController.popBackStack() },
+                    currentUser = currentUser
+                )
             }
             composable(Screen.AddIntervention.route) {
                 Text("Ajout intervention - À implémenter", modifier = Modifier.fillMaxSize().padding(16.dp))
@@ -477,9 +565,50 @@ fun AppNavigationWithModernBar(
                 )
             }
 
+            composable(Screen.UsersList.route) {
+                UsersListScreen(
+                    currentUserId = currentUser?.uid ?: "",
+                    viewModel = chatViewModel,
+                    onUserSelected = { id, name ->
+                        navController.navigate("chat/$id/$name")
+                    },
+                    onBackPressed = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = Screen.Chat.route,
+                arguments = listOf(
+                    androidx.navigation.navArgument("targetId") { type = androidx.navigation.NavType.StringType },
+                    androidx.navigation.navArgument("targetName") { type = androidx.navigation.NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val targetId = backStackEntry.arguments?.getString("targetId") ?: ""
+                val targetName = backStackEntry.arguments?.getString("targetName") ?: ""
+                
+                ChatScreen(
+                    currentUserId = currentUser?.uid ?: "",
+                    currentUserName = currentUser?.name ?: "Inconnu",
+                    targetUserId = targetId,
+                    targetUserName = targetName,
+                    viewModel = chatViewModel,
+                    onBackPressed = { navController.popBackStack() }
+                )
+            }
+
             composable(Screen.Home.route) { 
+                // Redirect if technician and first login
+                LaunchedEffect(currentUser) {
+                    if (currentUser?.role == UserRole.TECHNICIAN && currentUser?.isFirstLogin == true) {
+                        navController.navigate(Screen.TechWelcome.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    }
+                }
+
                 HomeScreenModern(
                     settingsViewModel = settingsViewModel,
+                    adminDashboardViewModel = adminDashboardViewModel,
                     role = currentUser?.role,
                     onNavigate = { route -> navController.navigate(route) }
                 ) 

@@ -31,6 +31,9 @@ import tn.esprit.sansa.ui.theme.*
 import tn.esprit.sansa.ui.components.*
 import tn.esprit.sansa.ui.screens.models.*
 import tn.esprit.sansa.ui.viewmodels.InterventionsViewModel
+import tn.esprit.sansa.ui.viewmodels.StreetlightsViewModel
+import tn.esprit.sansa.ui.viewmodels.AuthViewModel
+import androidx.compose.ui.zIndex
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,16 +43,22 @@ fun AddInterventionScreen(
     viewModel: InterventionsViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val streetlightsViewModel: StreetlightsViewModel = viewModel()
+    val authViewModel: AuthViewModel = viewModel()
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val streetlights by streetlightsViewModel.streetlights.collectAsState()
+
     var location by remember { mutableStateOf("") }
     var streetlightId by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var technicianName by remember { mutableStateOf("") }
-    var assignedBy by remember { mutableStateOf("") }
+    var technicianName by remember { mutableStateOf(currentUser?.name ?: "") }
+    var assignedBy by remember { mutableStateOf(if (currentUser?.role == UserRole.ADMIN) currentUser?.name ?: "Administrateur" else "Service Technique") }
     var type by remember { mutableStateOf(InterventionType.MAINTENANCE) }
     var priority by remember { mutableStateOf(InterventionPriority.MEDIUM) }
     var estimatedDuration by remember { mutableStateOf("60") }
     var notes by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
     val descriptionSuggestions = remember(type) {
         when (type) {
@@ -124,20 +133,37 @@ fun AddInterventionScreen(
                 // Localisation
                 item {
                     ModernSectionCard(title = "Localisation", icon = Icons.Default.LocationOn) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = streetlightId,
+                                onValueChange = { streetlightId = it },
+                                label = { Text("ID Lampadaire") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue, cursorColor = NoorBlue)
+                            )
+                            
+                            IconButton(
+                                onClick = { showScanner = true },
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(NoorBlue.copy(alpha = 0.1f))
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, null, tint = NoorBlue)
+                            }
+                        }
+                        
+                        Spacer(Modifier.height(16.dp))
                         OutlinedTextField(
                             value = location,
                             onValueChange = { location = it },
                             label = { Text("Adresse / Quartier") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue, cursorColor = NoorBlue)
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = streetlightId,
-                            onValueChange = { streetlightId = it },
-                            label = { Text("ID Lampadaire") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             singleLine = true,
@@ -181,30 +207,6 @@ fun AddInterventionScreen(
                     }
                 }
 
-                // Intervenants
-                item {
-                    ModernSectionCard(title = "Équipe", icon = Icons.Default.People) {
-                        OutlinedTextField(
-                            value = technicianName,
-                            onValueChange = { technicianName = it },
-                            label = { Text("Technicien") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue, cursorColor = NoorBlue)
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = assignedBy,
-                            onValueChange = { assignedBy = it },
-                            label = { Text("Assigné par") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue, cursorColor = NoorBlue)
-                        )
-                    }
-                }
 
                 // Bouton d'action
                 item {
@@ -236,7 +238,7 @@ fun AddInterventionScreen(
                             .fillMaxWidth()
                             .height(64.dp)
                             .shadow(8.dp, RoundedCornerShape(32.dp)),
-                        enabled = !isSubmitting && location.isNotBlank() && description.isNotBlank() && technicianName.isNotBlank(),
+                        enabled = !isSubmitting && location.isNotBlank() && description.isNotBlank(),
                         shape = RoundedCornerShape(32.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = NoorBlue)
                     ) {
@@ -251,6 +253,59 @@ fun AddInterventionScreen(
                 }
 
                 item { Spacer(Modifier.height(40.dp)) }
+            }
+
+            if (showScanner) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.9f))
+                        .zIndex(10f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Text(
+                            "Scanner le QR Code du lampadaire",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(280.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .border(2.dp, NoorBlue, RoundedCornerShape(24.dp))
+                        ) {
+                            QRScannerView(
+                                onCodeScanned = { code ->
+                                    streetlightId = code
+                                    // Auto-fill location if streetlight found
+                                    val streetlight = streetlights.find { it.id == code }
+                                    if (streetlight != null) {
+                                        location = streetlight.address
+                                        Toast.makeText(context, "Lampadaire détecté : ${streetlight.address}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    showScanner = false
+                                }
+                            )
+                        }
+                        
+                        Spacer(Modifier.height(32.dp))
+                        
+                        Button(
+                            onClick = { showScanner = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Annuler", color = Color.White)
+                        }
+                    }
+                }
             }
         }
     }

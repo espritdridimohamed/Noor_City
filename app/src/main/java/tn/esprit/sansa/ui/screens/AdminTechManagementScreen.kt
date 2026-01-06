@@ -43,7 +43,7 @@ fun AdminTechManagementScreen(
     val invitations by viewModel.invitations.collectAsState()
     val context = LocalContext.current
     
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableStateOf(1) } // Start on Invitations tab
     val tabs = listOf("Techniciens", "Invitations")
     var showInviteDialog by remember { mutableStateOf(false) }
 

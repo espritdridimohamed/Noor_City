@@ -3,6 +3,7 @@ package tn.esprit.sansa.ui.screens
 
 import androidx.compose.ui.graphics.toArgb
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -45,11 +46,14 @@ import tn.esprit.sansa.ui.theme.SansaTheme
 import android.content.res.Configuration
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
 import tn.esprit.sansa.ui.components.EmptyState
+import tn.esprit.sansa.ui.components.NoorChargeDialog
 
 import tn.esprit.sansa.ui.screens.models.*
 import tn.esprit.sansa.ui.viewmodels.StreetlightsViewModel
+import tn.esprit.sansa.ui.viewmodels.CamerasViewModel
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
+import tn.esprit.sansa.ui.viewmodels.NoorChargeViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tn.esprit.sansa.ui.theme.*
 
@@ -57,17 +61,22 @@ import tn.esprit.sansa.ui.theme.*
 @Composable
 fun StreetlightsMapScreen(
     viewModel: StreetlightsViewModel = viewModel(),
+    camerasViewModel: CamerasViewModel = viewModel(),
     role: UserRole? = UserRole.CITIZEN,
     modifier: Modifier = Modifier,
-    onNavigateToAddStreetlight: () -> Unit = {}
+    onNavigateToAddStreetlight: () -> Unit = {},
+    onNavigateToEditStreetlight: (String) -> Unit = {}
 ) {
     val streetlightsList by viewModel.streetlights.collectAsState()
+    val camerasList by camerasViewModel.cameras.collectAsState()
+    val zones by viewModel.zones.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var showTutorial by rememberSaveable { mutableStateOf(true) }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<StreetlightStatus?>(null) }
     var mapExpanded by remember { mutableStateOf(true) }
+    var chargingStreetlight by remember { mutableStateOf<Streetlight?>(null) }
 
     val filteredStreetlights = remember(streetlightsList.size, searchQuery, selectedStatus) {
         streetlightsList.filter { light ->
@@ -144,7 +153,15 @@ fun StreetlightsMapScreen(
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
-                    InteractiveMap(filteredStreetlights = filteredStreetlights)
+                    InteractiveMap(
+                        filteredStreetlights = filteredStreetlights,
+                        cameras = camerasList,
+                        zones = zones,
+                        onCharge = { id ->
+                            val light = streetlightsList.find { it.id == id }
+                            if (light != null) chargingStreetlight = light
+                        }
+                    )
                 }
             }
 
@@ -192,11 +209,17 @@ fun StreetlightsMapScreen(
                 ) { index, light ->
                     Box {
                         tn.esprit.sansa.ui.components.StaggeredItem(index = index) {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = light,
-                                onDelete = { viewModel.deleteStreetlight(it.id) }
+                                onDelete = { viewModel.deleteStreetlight(it.id) },
+                                onEdit = if (role == UserRole.ADMIN) { { onNavigateToEditStreetlight(it.id) } } else null
                             ) { item ->
-                                StreetlightCard(streetlight = item)
+                                val zoneName = zones.find { it.id == item.zoneId }?.name ?: item.zoneId
+                                StreetlightCard(
+                                    streetlight = item, 
+                                    zoneName = zoneName,
+                                    onCharge = { chargingStreetlight = it }
+                                )
                             }
                         }
 
@@ -206,7 +229,7 @@ fun StreetlightsMapScreen(
                                     .align(Alignment.CenterEnd)
                                     .padding(end = 16.dp)
                                     .offset(x = 16.dp, y = 32.dp),
-                                text = "Glissez vers la gauche pour supprimer",
+                                text = "Glissez pour modifier (droite) ou supprimer (gauche)",
                                 onDismiss = { showTutorial = false }
                             )
                         }
@@ -216,6 +239,13 @@ fun StreetlightsMapScreen(
 
             item { Spacer(Modifier.height(100.dp)) }
         }
+    }
+
+    if (chargingStreetlight != null) {
+        NoorChargeDialog(
+            streetlight = chargingStreetlight!!,
+            onDismiss = { chargingStreetlight = null }
+        )
     }
 }
 
@@ -386,11 +416,32 @@ private fun StatusFilters(
 }
 
 @Composable
-private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
-    val markersJson = remember(filteredStreetlights) {
-        filteredStreetlights.map { light ->
-            "{lat: ${light.latitude}, lng: ${light.longitude}, name: '${light.id}', status: '${light.status.displayName}', color: '${String.format("#%06X", (0xFFFFFF and light.status.color.toArgb()))}'}"
-        }.joinToString(",")
+private fun InteractiveMap(
+    filteredStreetlights: List<Streetlight>, 
+    cameras: List<Camera>, 
+    zones: List<Zone>,
+    onCharge: (String) -> Unit = {}
+) {
+    val markersJson = remember(filteredStreetlights, cameras, zones) {
+        val streetlightMarkers = filteredStreetlights.map { light ->
+            val zoneName = zones.find { it.id == light.zoneId }?.name ?: light.zoneId
+            val safeAddress = light.address.replace("'", "\\'")
+            val safeZoneName = zoneName.replace("'", "\\'")
+            "{type: 'light', lat: ${light.latitude}, lng: ${light.longitude}, name: '${light.id}', status: '${light.status.displayName}', address: '$safeAddress', zone: '$safeZoneName', hasCharger: ${light.hasCharger}, color: '${String.format("#%06X", (0xFFFFFF and light.status.color.toArgb()))}'}"
+        }
+        
+        val cameraMarkers = cameras.filter { it.associatedStreetlight.isNotBlank() }.mapNotNull { cam ->
+            val linkedLight = filteredStreetlights.find { it.id == cam.associatedStreetlight }
+            if (linkedLight != null) {
+                val safeZone = cam.zone.replace("'", "\\'")
+                // On décale légèrement la caméra par rapport au lampadaire s'ils sont au même endroit
+                val lat = linkedLight.latitude + 0.0001
+                val lng = linkedLight.longitude + 0.0001
+                "{type: 'camera', lat: $lat, lng: $lng, name: '${cam.id}', status: '${cam.alertStatus}', isAccident: ${cam.isAccidentActive}, address: '${cam.location}', zone: '$safeZone', color: '${if (cam.isAccidentActive) "#FF3B30" else "#5856D6"}'}"
+            } else null
+        }
+
+        (streetlightMarkers + cameraMarkers).joinToString(",")
     }
 
     val html = """
@@ -402,36 +453,78 @@ private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
             <style>
                 #map { height: 100vh; width: 100vw; margin: 0; padding: 0; border-radius: 20px; }
                 .marker-icon {
-                    width: 12px; height: 12px;
+                    width: 20px; height: 20px;
                     border-radius: 50%;
                     border: 2px solid white;
                     box-shadow: 0 0 5px rgba(0,0,0,0.3);
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 12px;
+                }
+                .camera-icon {
+                    width: 24px; height: 24px;
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-size: 14px;
+                    border: 2px solid white;
+                    box-shadow: 0 0 8px rgba(0,0,0,0.4);
+                }
+                .blinking {
+                    animation: blinker 1s linear infinite;
+                }
+                @keyframes blinker {
+                    50% { opacity: 0.3; background-color: red; transform: scale(1.2); }
                 }
             </style>
         </head>
         <body>
             <div id="map"></div>
             <script>
-                var map = L.map('map').setView([36.8065, 10.1815], 14);
+                var map = L.map('map', {zoomControl: false}).setView([36.8065, 10.1815], 14);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-                var lights = [$markersJson];
+                var markers = [$markersJson];
                 var group = L.featureGroup();
                 
-                lights.forEach(function(l) {
+                markers.forEach(function(m) {
+                    var iconHtml = '';
+                    if (m.type === 'light') {
+                        var innerContent = m.hasCharger ? '⚡' : '';
+                        iconHtml = '<div class="marker-icon" style="background-color: ' + m.color + '">' + innerContent + '</div>';
+                    } else {
+                        // Icone Caméra avec pulsation si accident
+                        var blinkClass = m.isAccident ? 'blinking' : '';
+                        iconHtml = '<div class="camera-icon ' + blinkClass + '" style="background-color: ' + m.color + '">📸</div>';
+                    }
+
                     var icon = L.divIcon({
                         className: 'custom-div-icon',
-                        html: '<div class="marker-icon" style="background-color: ' + l.color + '"></div>',
-                        iconSize: [12, 12],
-                        iconAnchor: [6, 6]
+                        html: iconHtml,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
                     });
 
-                    var marker = L.marker([l.lat, l.lng], {icon: icon}).addTo(map)
-                        .bindPopup("<b>" + l.name + "</b><br>Statut: " + l.status);
+                    var marker = L.marker([m.lat, m.lng], {icon: icon}).addTo(map);
+                    
+                    var chargerIcon = m.hasCharger ? ' ⚡' : '';
+                    var popupHtml = "<b>" + m.name + "</b> (" + (m.type === 'light' ? '💡' : '📹') + chargerIcon + ")<br>" + 
+                                   "<i>" + m.zone + "</i><br>" +
+                                   "<hr style='margin: 5px 0'>" +
+                                   "📍 " + m.address + "<br>" +
+                                   "🚦 Statut: " + m.status;
+                    
+                    if (m.hasCharger) {
+                        popupHtml += "<br><button onclick=\"Android.onChargeRequested('" + m.name + "')\" style='margin-top:8px; width:100%; padding:6px; background:#34C759; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer'>⚡ Recharger</button>";
+                    }
+
+                    if (m.isAccident) {
+                        popupHtml += "<br><b style='color:red'>🚨 ACCIDENT IA DÉTECTÉ</b>";
+                    }
+
+                    marker.bindPopup(popupHtml);
                     group.addLayer(marker);
                 });
 
-                if (lights.length > 0) {
+                if (markers.length > 0) {
                     map.fitBounds(group.getBounds().pad(0.2));
                 }
             </script>
@@ -448,6 +541,12 @@ private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
                 )
                 webViewClient = WebViewClient()
                 settings.javaScriptEnabled = true
+                addJavascriptInterface(object {
+                    @JavascriptInterface
+                    fun onChargeRequested(id: String) {
+                        onCharge(id)
+                    }
+                }, "Android")
                 loadDataWithBaseURL("https://osm.org", html, "text/html", "UTF-8", null)
             }
         },
@@ -463,8 +562,13 @@ private fun InteractiveMap(filteredStreetlights: List<Streetlight>) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StreetlightCard(streetlight: Streetlight) {
+private fun StreetlightCard(
+    streetlight: Streetlight, 
+    zoneName: String,
+    onCharge: (Streetlight) -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -541,6 +645,28 @@ private fun StreetlightCard(streetlight: Streetlight) {
                                 color = Color.White
                             )
                         }
+
+                        if (streetlight.hasCharger) {
+                            Spacer(Modifier.width(8.dp))
+                            Badge(
+                                containerColor = NoorBlue,
+                                modifier = Modifier.height(22.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.ElectricBolt,
+                                    null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "CHARGE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -559,8 +685,8 @@ private fun StreetlightCard(streetlight: Streetlight) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ModernStatItem(
-                    value = streetlight.address.take(15) + if (streetlight.address.length > 15) "..." else "",
-                    label = "Adresse",
+                    value = streetlight.bulbType.displayName,
+                    label = "Ampoule",
                     modifier = Modifier.weight(1f)
                 )
                 ModernStatItem(
@@ -569,7 +695,7 @@ private fun StreetlightCard(streetlight: Streetlight) {
                     modifier = Modifier.weight(1f)
                 )
                 ModernStatItem(
-                    value = streetlight.zoneId,
+                    value = zoneName,
                     label = "Zone",
                     modifier = Modifier.weight(1f)
                 )
@@ -587,10 +713,19 @@ private fun StreetlightCard(streetlight: Streetlight) {
                     )
 
                     InfoRow(
-                        icon = Icons.Default.TypeSpecimen,
-                        label = "Type ampoule",
-                        value = streetlight.bulbType.displayName
+                        icon = Icons.Default.Home,
+                        label = "Emplacement",
+                        value = "Voir sur la carte au-dessus"
                     )
+
+                    if (streetlight.hasCharger) {
+                        Spacer(Modifier.height(10.dp))
+                        InfoRow(
+                            icon = Icons.Default.ElectricBolt,
+                            label = "Noor Charge",
+                            value = "Borne de recharge disponible"
+                        )
+                    }
 
                     Spacer(Modifier.height(10.dp))
 
@@ -619,6 +754,20 @@ private fun StreetlightCard(streetlight: Streetlight) {
                             Spacer(Modifier.width(6.dp))
                             Text("Modifier", fontSize = 13.sp)
                         }
+
+                        if (streetlight.hasCharger) {
+                            Button(
+                                onClick = { onCharge(streetlight) },
+                                modifier = Modifier.weight(1.2f),
+                                colors = ButtonDefaults.buttonColors(containerColor = NoorGreen),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.ElectricBolt, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Recharger", fontSize = 13.sp)
+                            }
+                        }
+
                         Button(
                             onClick = { /* TODO */ },
                             modifier = Modifier.weight(1f),

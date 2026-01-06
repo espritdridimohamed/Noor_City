@@ -3,6 +3,7 @@ package tn.esprit.sansa.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -39,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
 import tn.esprit.sansa.ui.components.EmptyState
 import tn.esprit.sansa.ui.components.StaggeredItem
 import tn.esprit.sansa.ui.screens.models.*
@@ -181,7 +182,7 @@ fun SensorsScreen(
                 ) { index: Int, sensor: Sensor ->
                     StaggeredItem(index = index) {
                         Box {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = sensor,
                                 onDelete = { viewModel.deleteSensor(sensor.id) }
                             ) { item ->
@@ -397,6 +398,17 @@ private fun SensorCard(sensor: Sensor) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
 
+    // Animation de danger pour l'IA
+    val isDanger = sensor.type == SensorType.TEMPERATURE && sensor.riskLevel >= 2
+    val borderPulse by animateColorAsState(
+        targetValue = if (isDanger) NoorRed.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dangerPulse"
+    )
+
     val elevation by animateDpAsState(
         targetValue = if (pressed) 4.dp else 1.dp,
         animationSpec = tween(200)
@@ -416,7 +428,7 @@ private fun SensorCard(sensor: Sensor) {
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = elevation),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        border = BorderStroke(if (isDanger) 2.dp else 1.dp, borderPulse)
     ) {
         Column(
             modifier = Modifier
@@ -434,13 +446,13 @@ private fun SensorCard(sensor: Sensor) {
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(sensor.type.color.copy(alpha = 0.12f)),
+                        .background(if (isDanger) NoorRed.copy(alpha = 0.15f) else sensor.type.color.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        sensor.type.icon,
+                        if (isDanger) Icons.Default.Warning else sensor.type.icon,
                         contentDescription = null,
-                        tint = sensor.type.color,
+                        tint = if (isDanger) NoorRed else sensor.type.color,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -460,31 +472,21 @@ private fun SensorCard(sensor: Sensor) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Badge(
-                            containerColor = sensor.status.color,
+                            containerColor = if (isDanger) NoorRed else sensor.status.color,
                             modifier = Modifier.height(22.dp)
                         ) {
                             Text(
-                                text = sensor.status.displayName,
+                                text = if (isDanger) "DANGER CHALEUR" else sensor.status.displayName,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
                             )
                         }
 
-                        if (sensor.type == SensorType.TEMPERATURE) {
-                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                            val alpha by infiniteTransition.animateFloat(
-                                initialValue = 0.4f,
-                                targetValue = 1f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(1000),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "alpha"
-                            )
-                            
-                            Surface(
-                                color = NoorRed.copy(alpha = alpha),
+                        // Badge AI Smart
+                        if (sensor.type == SensorType.TEMPERATURE && sensor.riskLevel > 0) {
+                             Surface(
+                                color = NoorIndigo,
                                 shape = RoundedCornerShape(4.dp),
                                 modifier = Modifier.height(22.dp)
                             ) {
@@ -492,15 +494,10 @@ private fun SensorCard(sensor: Sensor) {
                                     modifier = Modifier.padding(horizontal = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                    )
+                                    Icon(Icons.Default.Psychology, null, tint = Color.White, modifier = Modifier.size(12.dp))
                                     Spacer(Modifier.width(4.dp))
                                     Text(
-                                        "LIVE",
+                                        "AI ALERT",
                                         color = Color.White,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Black
@@ -528,19 +525,33 @@ private fun SensorCard(sensor: Sensor) {
             ) {
                 ModernStatItem(
                     value = "${sensor.currentValue} ${sensor.type.unit}",
-                    label = "Valeur",
+                    label = "Réel",
                     modifier = Modifier.weight(1f)
                 )
-                ModernStatItem(
-                    value = "${sensor.batteryLevel}%",
-                    label = "Batterie",
-                    modifier = Modifier.weight(1f)
-                )
-                ModernStatItem(
-                    value = sensor.lastUpdate,
-                    label = "Dern. MAJ",
-                    modifier = Modifier.weight(1f)
-                )
+                
+                if (sensor.type == SensorType.TEMPERATURE) {
+                     ModernStatItem(
+                        value = "${String.format("%.1f", sensor.heatIndex)}°C",
+                        label = "Ressenti (AI)",
+                        modifier = Modifier.weight(1f)
+                    )
+                     ModernStatItem(
+                        value = "${String.format("%.0f", sensor.humidity)}%",
+                        label = "Humidité",
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    ModernStatItem(
+                        value = "${sensor.batteryLevel}%",
+                        label = "Batterie",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModernStatItem(
+                        value = sensor.lastUpdate,
+                        label = "Dern. MAJ",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             AnimatedVisibility(
@@ -553,6 +564,21 @@ private fun SensorCard(sensor: Sensor) {
                         modifier = Modifier.padding(vertical = 14.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                     )
+                    
+                    if (sensor.type == SensorType.TEMPERATURE) {
+                         InfoRow(
+                            icon = Icons.Default.Thermostat,
+                            label = "Analyse IA",
+                            value = when(sensor.riskLevel) {
+                                0 -> "Conditions optimales. Pas de risque sanitaire."
+                                1 -> "Attention : Inconfort thermique possible."
+                                2 -> "DANGER : Risque de coup de chaleur !"
+                                3 -> "URGENCE : Conditions extrêmes détectées."
+                                else -> "Analyse en cours..."
+                            }
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
 
                     InfoRow(
                         icon = Icons.Default.Lightbulb,
@@ -566,14 +592,6 @@ private fun SensorCard(sensor: Sensor) {
                         icon = Icons.Default.ConfirmationNumber,
                         label = "Identifiant",
                         value = sensor.id
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
-                    InfoRow(
-                        icon = Icons.Default.Update,
-                        label = "Dernière mise à jour",
-                        value = sensor.lastUpdate
                     )
 
                     Spacer(Modifier.height(14.dp))

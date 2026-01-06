@@ -6,13 +6,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.screens.models.UserAccount
+import tn.esprit.sansa.ui.screens.models.Technician
+import tn.esprit.sansa.ui.screens.models.CulturalEvent
+import tn.esprit.sansa.ui.screens.models.AmbianceType
+import tn.esprit.sansa.ui.screens.models.EventStatus
+import tn.esprit.sansa.ui.screens.models.LightingProgram
+import tn.esprit.sansa.ui.screens.models.TechnicianStatus
+import tn.esprit.sansa.ui.screens.models.TechnicianAssignmentStatus
+import tn.esprit.sansa.ui.screens.models.mockTechnicians
+import tn.esprit.sansa.ui.screens.models.ProgramStatus
+import tn.esprit.sansa.ui.screens.models.TechnicianSpecialty
 import java.util.Date
 import androidx.lifecycle.viewModelScope
 
 class CulturalEventsViewModel : ViewModel() {
     private val _events = MutableStateFlow<List<CulturalEvent>>(emptyList())
     val events: StateFlow<List<CulturalEvent>> = _events.asStateFlow()
+
+    private val authRepository = tn.esprit.sansa.data.repositories.FirebaseAuthRepository()
+    private val _realTechnicians = MutableStateFlow<List<Technician>>(emptyList())
 
 
 
@@ -78,22 +91,52 @@ class CulturalEventsViewModel : ViewModel() {
                  _lightingPrograms.value = it
              }
         }
+
+        // Fetch Real Technicians
+        viewModelScope.launch {
+            val users = authRepository.getTechnicians()
+            _realTechnicians.value = users.map { user ->
+                val specialty = when(user.specialty?.lowercase()) {
+                    "électricité", "electrical" -> TechnicianSpecialty.ELECTRICAL
+                    "réseau", "network" -> TechnicianSpecialty.NETWORK
+                    "maintenance" -> TechnicianSpecialty.MAINTENANCE
+                    "surveillance" -> TechnicianSpecialty.SURVEILLANCE
+                    else -> TechnicianSpecialty.TECHNICAL_SUPPORT
+                }
+                Technician(
+                    id = user.uid,
+                    name = user.name,
+                    email = user.email,
+                    specialty = specialty,
+                    status = if (user.isVerified) TechnicianStatus.AVAILABLE else TechnicianStatus.OFFLINE,
+                    phone = user.phoneNumber,
+                    interventionsCount = 0,
+                    successRate = 100f,
+                    joinDate = "Récent",
+                    lastActivity = "En ligne",
+                    zoneIds = if (user.workingZone.isNotBlank()) listOf(user.workingZone) else emptyList()
+                )
+            }
+        }
     }
 
     // Mock Streetlights (In real app, fetch from Repo)
     val availableStreetlights = listOf("LAMP-001", "LAMP-002", "LAMP-003", "LAMP-A10", "LAMP-B20", "LAMP-C30")
 
     fun getAvailableTechnicians(zoneName: String, date: Date): List<Technician> {
-        return mockTechnicians.filter { tech ->
-            // 1. Check Zone Coverage
-            val coversZone = tech.zoneIds.any { it.equals(zoneName, ignoreCase = true) }
+        val allTechs = _realTechnicians.value.ifEmpty { mockTechnicians }
+        return allTechs.filter { tech ->
+            // 1. Check Zone Coverage (Optional)
+            val matchesZone = zoneName.isBlank() || tech.zoneIds.any { it.equals(zoneName, ignoreCase = true) }
             
-            // 2. Check Availability (Mock: check if they have a program on the same day)
+            // 2. Check Availability
             val isBusy = _lightingPrograms.value.any { program -> 
-                program.technicianId == tech.id 
+                program.technicianId == tech.id && 
+                (program.technicianStatus == TechnicianAssignmentStatus.WAITING || 
+                 program.technicianStatus == TechnicianAssignmentStatus.ACCEPTED)
             }
 
-            coversZone && !isBusy && tech.status != TechnicianStatus.OFFLINE
+            matchesZone && !isBusy && tech.status != TechnicianStatus.OFFLINE
         }
     }
 
@@ -105,7 +148,7 @@ class CulturalEventsViewModel : ViewModel() {
         )
         // Update in DB
         viewModelScope.launch {
-            lightingRepository.addProgram(updatedProgram) {}
+            lightingRepository.addProgram(updatedProgram) { _, _ -> }
         }
     }
 

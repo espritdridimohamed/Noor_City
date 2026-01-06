@@ -5,10 +5,12 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import tn.esprit.sansa.data.repositories.AuthResult
 import tn.esprit.sansa.data.repositories.FirebaseAuthRepository
 import tn.esprit.sansa.ui.screens.models.UserAccount
+import tn.esprit.sansa.ui.screens.models.UserRole
 
 class AuthViewModel(
     private val repository: FirebaseAuthRepository = FirebaseAuthRepository()
@@ -20,6 +22,8 @@ class AuthViewModel(
     private val _currentUser = MutableStateFlow<UserAccount?>(null)
     val currentUser: StateFlow<UserAccount?> = _currentUser.asStateFlow()
 
+    private var sessionJob: Job? = null
+
     private val _technicians = MutableStateFlow<List<UserAccount>>(emptyList())
     val technicians: StateFlow<List<UserAccount>> = _technicians.asStateFlow()
 
@@ -28,13 +32,27 @@ class AuthViewModel(
 
     init {
         checkSession()
-        fetchData()
+        observeData()
+    }
+
+    private fun observeData() {
+        viewModelScope.launch {
+            repository.getTechniciansFlow().collect {
+                _technicians.value = it
+            }
+        }
+        viewModelScope.launch {
+            repository.getInvitationsFlow().collect {
+                _invitations.value = it
+            }
+        }
     }
 
     private fun checkSession() {
         val firebaseUser = repository.getCurrentUser()
         if (firebaseUser != null) {
-            viewModelScope.launch {
+            sessionJob?.cancel()
+            sessionJob = viewModelScope.launch {
                 val account = repository.getUserAccount(firebaseUser.uid)
                 if (account != null) {
                     _currentUser.value = account
@@ -66,35 +84,39 @@ class AuthViewModel(
     }
 
     fun loginWithEmail(email: String, password: String) {
-        if (email.trim().lowercase() == "admin" && password == "admin") {
-            val adminUser = UserAccount(
-                uid = "ADMIN_BACKDOOR",
-                name = "Administrateur Système",
-                email = "admin@noorcity.tn",
-                role = tn.esprit.sansa.ui.screens.models.UserRole.ADMIN
-            )
-            _currentUser.value = adminUser
-            _authState.value = AuthState.Authenticated(adminUser)
-            return
-        }
-
-        if (email.trim().lowercase() == "tech" && password == "tech") {
-            val techUser = UserAccount(
-                uid = "TECH001", // Matches hardcoded ID in CulturalEventsScreen
-                name = "Ahmed Ben Salem",
-                email = "ahmed.bensalem@sansa.tn",
-                role = tn.esprit.sansa.ui.screens.models.UserRole.TECHNICIAN,
-                specialty = "Électricité",
-                workingZone = "Zone A",
-                isVerified = true
-            )
-            _currentUser.value = techUser
-            _authState.value = AuthState.Authenticated(techUser)
-            return
-        }
-
         _authState.value = AuthState.Loading
+        
         viewModelScope.launch {
+            if (email.trim().lowercase() == "admin" && password == "admin") {
+                kotlinx.coroutines.delay(500) // Small delay for UI to register Loading state
+                val adminUser = UserAccount(
+                    uid = "ADMIN_BACKDOOR",
+                    name = "Administrateur Système",
+                    email = "admin@noorcity.tn",
+                    role = tn.esprit.sansa.ui.screens.models.UserRole.ADMIN
+                )
+                _currentUser.value = adminUser
+                _authState.value = AuthState.Authenticated(adminUser)
+                return@launch
+            }
+
+            if (email.trim().lowercase() == "tech" && password == "tech") {
+                kotlinx.coroutines.delay(500)
+                val techUser = UserAccount(
+                    uid = "TECH001",
+                    name = "Ahmed Ben Salem",
+                    email = "ahmed.bensalem@sansa.tn",
+                    role = tn.esprit.sansa.ui.screens.models.UserRole.TECHNICIAN,
+                    specialty = "Électricité",
+                    workingZone = "Zone A",
+                    isVerified = true,
+                    isFirstLogin = false
+                )
+                _currentUser.value = techUser
+                _authState.value = AuthState.Authenticated(techUser)
+                return@launch
+            }
+
             when (val result = repository.signIn(email, password)) {
                 is AuthResult.Success -> {
                     _currentUser.value = result.user
@@ -106,6 +128,37 @@ class AuthViewModel(
             }
         }
     }
+
+    fun loginWithGoogle(idToken: String) {
+        _authState.value = AuthState.Loading
+        viewModelScope.launch {
+            when (val result = repository.signInWithGoogle(idToken)) {
+                is AuthResult.Success -> {
+                    _currentUser.value = result.user
+                    _authState.value = AuthState.Authenticated(result.user)
+                }
+                is AuthResult.Failure -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+            }
+        }
+    }
+
+    fun loginWithFacebook(accessToken: String) {
+        _authState.value = AuthState.Loading
+        viewModelScope.launch {
+            when (val result = repository.signInWithFacebook(accessToken)) {
+                is AuthResult.Success -> {
+                    _currentUser.value = result.user
+                    _authState.value = AuthState.Authenticated(result.user)
+                }
+                is AuthResult.Failure -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
+            }
+        }
+    }
+
 
     fun registerCitizen(name: String, email: String, password: String) {
         _authState.value = AuthState.Loading
@@ -123,6 +176,7 @@ class AuthViewModel(
     }
 
     fun logout() {
+        sessionJob?.cancel()
         repository.signOut()
         _currentUser.value = null
         _authState.value = AuthState.Unauthenticated
@@ -137,7 +191,7 @@ class AuthViewModel(
     fun inviteTechnician(name: String, email: String, specialty: String) {
         _authState.value = AuthState.Loading
         viewModelScope.launch {
-            when (val result = repository.inviteTechnician(name, email, specialty)) {
+            when (val result = repository.inviteTechnician(name.trim(), email.trim(), specialty)) {
                 is AuthResult.Success -> {
                     _authState.value = AuthState.Idle 
                     fetchData() // Refresh both lists
@@ -149,11 +203,11 @@ class AuthViewModel(
         }
     }
 
-    fun completeOnboarding(phoneNumber: String, zone: String) {
+    fun activateTechnicianAccount() {
         val user = _currentUser.value ?: return
         _authState.value = AuthState.Loading
         viewModelScope.launch {
-            when (val result = repository.completeOnboarding(user.uid, phoneNumber, zone)) {
+            when (val result = repository.activateTechnician(user.uid)) {
                 is AuthResult.Success -> {
                     _currentUser.value = result.user
                     _authState.value = AuthState.Authenticated(result.user)
@@ -207,6 +261,30 @@ class AuthViewModel(
                 }
             } else {
                 _authState.value = AuthState.Error("Mot de passe actuel incorrect.")
+            }
+        }
+    }
+
+    fun completeOnboarding(phone: String, zone: String) {
+        val user = _currentUser.value ?: return
+        _authState.value = AuthState.Loading
+        viewModelScope.launch {
+            // First update the profile details
+            val updates = mapOf(
+                "phone" to phone,
+                "workingZone" to zone
+            )
+            repository.updateUserProfile(updates)
+            
+            // Then activate the account (which sets isFirstLogin to false and moves to /technicians)
+            when (val result = repository.activateTechnician(user.uid)) {
+                is AuthResult.Success -> {
+                    _currentUser.value = result.user
+                    _authState.value = AuthState.Authenticated(result.user)
+                }
+                is AuthResult.Failure -> {
+                    _authState.value = AuthState.Error(result.message)
+                }
             }
         }
     }

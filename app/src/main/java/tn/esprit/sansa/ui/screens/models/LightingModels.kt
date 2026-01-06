@@ -10,14 +10,8 @@ import tn.esprit.sansa.ui.theme.*
 // La palette Noor est maintenant centralisée dans tn.esprit.sansa.ui.theme.NoorPalette
 
 
-enum class ProgramStatus(val displayName: String, val color: Color) {
-    PENDING("En attente", Color.Gray), // For Event workflow
-    ACTIVE("Actif", NoorGreen),
-    SCHEDULED("Planifié", NoorBlue),
-    PAUSED("En pause", NoorAmber),
-    INACTIVE("Inactif", Color.Gray),
-    COMPLETED("Terminé", NoorPurple) // For Event workflow
-}
+// Note: LightingProgram, ProgramStatus and TechnicianAssignmentStatus have been moved
+// to CulturalEventModels.kt to support the Noor Intelligent Lighting system.
 
 enum class LightingRuleType(val displayName: String, val color: Color, val icon: ImageVector) {
     TIME_BASED("Basé sur l'heure", NoorBlue, Icons.Default.Schedule),
@@ -29,23 +23,7 @@ enum class LightingRuleType(val displayName: String, val color: Color, val icon:
 }
 
 data class LightingRule(
-    val type: LightingRuleType,
-    val description: String,
-    val parameters: String
-)
-
-data class LightingProgram(
-    val id: String,
-    val name: String,
-    val rules: List<LightingRule>,
-    val associatedStreetlights: List<String>,
-    val status: ProgramStatus,
-    val createdDate: String,
-    val lastModified: String,
-    val priority: Int,
-    val description: String,
-    // Event Workflow Fields
-    val eventId: String? = null,
-    val technicianId: String? = null,
-    val technicianStatus: TechnicianAssignmentStatus? = null
+    val type: LightingRuleType = LightingRuleType.TIME_BASED,
+    val description: String = "",
+    val parameters: String = ""
 )

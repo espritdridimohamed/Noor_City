@@ -11,14 +11,14 @@ data class UserAccount(
     val name: String = "",
     val email: String = "",
     val role: UserRole = UserRole.CITIZEN,
-    val specialty: String? = null, // Only for Technicians
+    val specialty: String? = null,
     val profilePicture: String? = null,
-    val isVerified: Boolean = false,
+    var isVerified: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val isFirstLogin: Boolean = true, // Pour suivre la première connexion
-    val invitedAt: Long? = null, // Timestamp de l'invitation
-    val activatedAt: Long? = null, // Timestamp de l'activation (premier login)
-    val phoneNumber: String = "", // Mobile du technicien
-    val workingZone: String = "", // Zone assignée
-    val coordinates: String = "" // Coordonnées GPS (ex: "36.8065, 10.1815")
+    var isFirstLogin: Boolean = true,
+    val invitedAt: Long? = null,
+    val activatedAt: Long? = null,
+    val phoneNumber: String = "",
+    val workingZone: String = "",
+    val coordinates: String = ""
 )

@@ -11,10 +11,18 @@ import tn.esprit.sansa.ui.theme.SansaTheme
 import tn.esprit.sansa.ui.viewmodels.SettingsViewModel
 import tn.esprit.sansa.ui.utils.SansaLocalization
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.stripe.android.PaymentConfiguration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialisation de Stripe avec la clé fournie par l'utilisateur
+        PaymentConfiguration.init(
+            applicationContext,
+            "pk_test_51SmQcvDxGWBSGImQKuRY1oie8VBWDQD8suP009GNyWFpsQuf9qcstYTiJbBx5Oo8DiIrrq9vS3pu1DJGBy0wA3mT00dHjcpeDB"
+        )
+
         enableEdgeToEdge()
 
         setContent {

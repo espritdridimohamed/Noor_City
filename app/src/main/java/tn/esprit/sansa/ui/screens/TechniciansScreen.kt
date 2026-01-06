@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
 import tn.esprit.sansa.ui.components.EmptyState
 import tn.esprit.sansa.ui.components.StaggeredItem
 import tn.esprit.sansa.ui.components.CardSkeleton
@@ -278,7 +278,7 @@ fun TechniciansScreen(
                 ) { index, technician ->
                     StaggeredItem(index = index) {
                         Box {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = technician,
                                 onDelete = { techniciansList.remove(technician) }
                             ) { item ->

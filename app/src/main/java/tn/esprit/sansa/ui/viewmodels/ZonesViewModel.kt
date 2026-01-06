@@ -6,15 +6,18 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import tn.esprit.sansa.data.repositories.FirebaseZonesRepository
 import tn.esprit.sansa.data.repositories.GeocodingResult
-import tn.esprit.sansa.ui.screens.models.Zone
-import tn.esprit.sansa.ui.screens.models.ZoneStatus
-import tn.esprit.sansa.ui.screens.models.ZoneType
+import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.data.services.WeatherService
 
 class ZonesViewModel : ViewModel() {
     private val repository = FirebaseZonesRepository()
+    private val weatherService = WeatherService()
 
     private val _zones = MutableStateFlow<List<Zone>>(emptyList())
     val zones: StateFlow<List<Zone>> = _zones
+
+    private val _zoneWeather = MutableStateFlow<Map<String, ZoneWeatherInfo>>(emptyList<Pair<String, ZoneWeatherInfo>>().toMap())
+    val zoneWeather: StateFlow<Map<String, ZoneWeatherInfo>> = _zoneWeather
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -29,9 +32,26 @@ class ZonesViewModel : ViewModel() {
     fun loadZones() {
         viewModelScope.launch {
             _isLoading.value = true
-            repository.getZones().collect { 
-                _zones.value = it
+            repository.getZones().collect { zones ->
+                _zones.value = zones
                 _isLoading.value = false
+                fetchWeatherForZones(zones)
+            }
+        }
+    }
+
+    private fun fetchWeatherForZones(zones: List<Zone>) {
+        viewModelScope.launch {
+            zones.forEach { zone ->
+                launch {
+                    val weather = weatherService.getWeatherData(zone.latitude, zone.longitude)
+                    val airQuality = weatherService.getAirQualityData(zone.latitude, zone.longitude)
+                    val info = ZoneWeatherInfo(weather, airQuality)
+                    
+                    _zoneWeather.update { currentMap ->
+                        currentMap + (zone.id to info)
+                    }
+                }
             }
         }
     }
@@ -61,5 +81,17 @@ class ZonesViewModel : ViewModel() {
 
     fun refresh() {
         loadZones()
+    }
+
+    /**
+     * Generate next sequential zone ID (format: Z001, Z002, etc.)
+     */
+    suspend fun generateNextZoneId(): String {
+        val existingIds = _zones.value
+            .mapNotNull { it.id.removePrefix("Z").toIntOrNull() }
+            .maxOrNull() ?: 0
+        
+        val nextNumber = existingIds + 1
+        return "Z${nextNumber.toString().padStart(3, '0')}"
     }
 }

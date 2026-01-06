@@ -31,6 +31,7 @@ import tn.esprit.sansa.ui.viewmodels.ZonesViewModel
 import tn.esprit.sansa.ui.components.ModernSectionCard
 import tn.esprit.sansa.ui.theme.NoorBlue
 import androidx.compose.ui.graphics.toArgb
+import kotlinx.coroutines.launch
 
 import androidx.compose.ui.tooling.preview.Preview
 import tn.esprit.sansa.ui.theme.SansaTheme
@@ -61,6 +62,12 @@ fun AddZoneScreen(
     var longitude by remember { mutableStateOf(10.1815) }
 
     val geocodingResults by viewModel.geocodingResults.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    // Auto-generate ID on screen load
+    LaunchedEffect(Unit) {
+        zoneId = viewModel.generateNextZoneId()
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -83,12 +90,17 @@ fun AddZoneScreen(
                 ) {
                     OutlinedTextField(
                         value = zoneId,
-                        onValueChange = { zoneId = it.uppercase() },
-                        label = { Text("ID de la zone (ex: Z001)") },
+                        onValueChange = {},
+                        label = { Text("ID de la zone (auto-généré)") },
                         leadingIcon = { Icon(Icons.Default.Tag, null) },
+                        trailingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue)
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = NoorBlue.copy(alpha = 0.5f),
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(

@@ -41,6 +41,10 @@ android {
     buildFeatures {
         compose = true
     }
+
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
@@ -63,8 +67,15 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.database)
+    implementation(libs.firebase.firestore)  // ← AJOUTÉ pour BlockchainService
     implementation(libs.firebase.functions)
     implementation(libs.firebase.auth)
+    implementation(libs.play.services.auth)
+    implementation(libs.facebook.login)
+
+    // Coroutines (pour BlockchainService)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // QR & Scanning
     implementation(libs.zxing.core)
@@ -72,10 +83,23 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    
+    // TensorFlow Lite
+    implementation(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.tensorflow.lite.metadata)
+    implementation(libs.tensorflow.lite.gpu)
+    implementation(libs.tensorflow.lite.task.vision)
+    
+    // Payments (Stripe)
+    implementation(libs.stripe.android)
 
     // HTTP & Email (EmailJS)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.json:json:20231013")
+    
+    // Guava (pour Camera ListenableFuture)
+    implementation("com.google.guava:guava:31.1-android")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

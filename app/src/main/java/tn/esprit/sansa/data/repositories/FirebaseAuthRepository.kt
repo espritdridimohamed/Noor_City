@@ -1,15 +1,18 @@
 package tn.esprit.sansa.data.repositories
 
-import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.*
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.functions.FirebaseFunctions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import tn.esprit.sansa.ui.screens.models.*
+import tn.esprit.sansa.ui.screens.models.UserAccount
+import tn.esprit.sansa.ui.screens.models.UserRole
 
 class FirebaseAuthRepository {
+    // Repository handling Firebase Auth and User Database synchronization
     private val auth = FirebaseAuth.getInstance()
     private val database = FirebaseDatabase.getInstance().getReference("users")
-    private val functions = FirebaseFunctions.getInstance()
 
     fun getCurrentUser() = auth.currentUser
 
@@ -17,16 +20,46 @@ class FirebaseAuthRepository {
         return try {
             val snapshot = database.child(uid).get().await()
             snapshot.getValue(UserAccount::class.java)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
+    }
+
+    fun getTechniciansFlow(): Flow<List<UserAccount>> = callbackFlow {
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val techs = snapshot.children.mapNotNull { it.getValue(UserAccount::class.java) }
+                trySend(techs)
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                close(error.toException())
+            }
+        }
+        val ref = FirebaseDatabase.getInstance().getReference("technicians")
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }
+
+    fun getInvitationsFlow(): Flow<List<UserAccount>> = callbackFlow {
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val invites = snapshot.children.mapNotNull { it.getValue(UserAccount::class.java) }
+                trySend(invites)
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                close(error.toException())
+            }
+        }
+        val ref = FirebaseDatabase.getInstance().getReference("invitations")
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
     }
 
     suspend fun getTechnicians(): List<UserAccount> {
         return try {
             val snapshot = FirebaseDatabase.getInstance().getReference("technicians").get().await()
             snapshot.children.mapNotNull { it.getValue(UserAccount::class.java) }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -35,14 +68,16 @@ class FirebaseAuthRepository {
         return try {
             val snapshot = FirebaseDatabase.getInstance().getReference("invitations").get().await()
             snapshot.children.mapNotNull { it.getValue(UserAccount::class.java) }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
 
     suspend fun signIn(email: String, password: String): AuthResult {
+        val trimmedEmail = email.trim()
+        val trimmedPassword = password.trim()
         return try {
-            val result = auth.signInWithEmailAndPassword(email, password).await()
+            val result = auth.signInWithEmailAndPassword(trimmedEmail, trimmedPassword).await()
             val user = result.user
             if (user != null) {
                 val account = getUserAccount(user.uid)
@@ -59,15 +94,58 @@ class FirebaseAuthRepository {
         }
     }
 
-    suspend fun signUpCitizen(name: String, email: String, password: String): AuthResult {
+    suspend fun signInWithGoogle(idToken: String): AuthResult {
         return try {
-            val result = auth.createUserWithEmailAndPassword(email, password).await()
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val result = auth.signInWithCredential(credential).await()
+            handleSocialSignInResult(result)
+        } catch (e: Exception) {
+            AuthResult.Failure(e.localizedMessage ?: "Erreur de connexion Google.")
+        }
+    }
+
+    suspend fun signInWithFacebook(accessToken: String): AuthResult {
+        return try {
+            val credential = FacebookAuthProvider.getCredential(accessToken)
+            val result = auth.signInWithCredential(credential).await()
+            handleSocialSignInResult(result)
+        } catch (e: Exception) {
+            AuthResult.Failure(e.localizedMessage ?: "Erreur de connexion Facebook.")
+        }
+    }
+
+    private suspend fun handleSocialSignInResult(result: com.google.firebase.auth.AuthResult): AuthResult {
+        val user = result.user ?: return AuthResult.Failure("Échec de l'authentification.")
+        
+        // Check if user already exists in DB
+        val existingAccount = getUserAccount(user.uid)
+        return if (existingAccount != null) {
+            AuthResult.Success(existingAccount)
+        } else {
+            // Create a new account for the social user
+            val newAccount = UserAccount(
+                uid = user.uid,
+                name = user.displayName ?: "Utilisateur",
+                email = user.email ?: "",
+                role = UserRole.CITIZEN,
+                profilePicture = user.photoUrl?.toString()
+            )
+            database.child(user.uid).setValue(newAccount).await()
+            AuthResult.Success(newAccount)
+        }
+    }
+
+    suspend fun signUpCitizen(name: String, email: String, password: String): AuthResult {
+        val trimmedEmail = email.trim()
+        val trimmedPassword = password.trim()
+        return try {
+            val result = auth.createUserWithEmailAndPassword(trimmedEmail, trimmedPassword).await()
             val user = result.user
             if (user != null) {
                 val newAccount = UserAccount(
                     uid = user.uid,
-                    name = name,
-                    email = email,
+                    name = name.trim(),
+                    email = trimmedEmail,
                     role = UserRole.CITIZEN
                 )
                 database.child(user.uid).setValue(newAccount).await()
@@ -88,24 +166,26 @@ class FirebaseAuthRepository {
         return try {
             auth.sendPasswordResetEmail(email).await()
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
 
     suspend fun inviteTechnician(name: String, email: String, specialty: String): AuthResult {
+        val trimmedEmail = email.trim().lowercase()
         return try {
             val tempPassword = tn.esprit.sansa.data.services.EmailService.generateSecurePassword()
             
-            val authResult = auth.createUserWithEmailAndPassword(email, tempPassword).await()
+            val authResult = auth.createUserWithEmailAndPassword(trimmedEmail, tempPassword).await()
             val firebaseUser = authResult.user ?: return AuthResult.Failure("Échec de la création du compte Firebase")
             
             val newTech = UserAccount(
                 uid = firebaseUser.uid,
-                name = name,
-                email = email,
+                name = name.trim(),
+                email = trimmedEmail,
                 role = UserRole.TECHNICIAN,
                 specialty = specialty,
+                profilePicture = null,
                 isVerified = false,
                 isFirstLogin = true,
                 invitedAt = System.currentTimeMillis()
@@ -117,8 +197,8 @@ class FirebaseAuthRepository {
                 .child(firebaseUser.uid).setValue(newTech).await()
             
             val emailResult = tn.esprit.sansa.data.services.EmailService.sendInvitationEmail(
-                technicianName = name,
-                technicianEmail = email,
+                technicianName = name.trim(),
+                technicianEmail = trimmedEmail,
                 tempPassword = tempPassword
             )
             
@@ -127,34 +207,39 @@ class FirebaseAuthRepository {
             }
             
             AuthResult.Success(newTech)
-            AuthResult.Success(newTech)
-        } catch (e: com.google.firebase.auth.FirebaseAuthUserCollisionException) {
-            AuthResult.Failure("Cet email est déjà utilisé par un compte existant.")
+        } catch (e: FirebaseAuthException) {
+            val message = when(e.errorCode) {
+                "ERROR_EMAIL_ALREADY_IN_USE" -> "Cet email est déjà utilisé par un compte existant."
+                "ERROR_INVALID_EMAIL" -> "L'adresse e-mail est mal formatée."
+                else -> e.localizedMessage ?: "Erreur lors de l'invitation."
+            }
+            AuthResult.Failure(message)
         } catch (e: Exception) {
             AuthResult.Failure(e.localizedMessage ?: "Erreur lors de la création du technicien.")
         }
     }
-
-    suspend fun completeOnboarding(uid: String, phoneNumber: String, zone: String): AuthResult {
+  
+    suspend fun activateTechnician(uid: String): AuthResult {
         return try {
             val account = getUserAccount(uid) ?: return AuthResult.Failure("Compte introuvable")
             
-            val updatedAccount = account.copy(
-                phoneNumber = phoneNumber,
-                workingZone = zone,
-                isFirstLogin = false,
-                activatedAt = System.currentTimeMillis(),
-                isVerified = true
+            val updates = hashMapOf<String, Any>(
+                "isFirstLogin" to false,
+                "activatedAt" to System.currentTimeMillis(),
+                "isVerified" to true
             )
             
-            // 1. Mettre à jour /users
-            database.child(uid).setValue(updatedAccount).await()
+            // 1. Update /users
+            database.child(uid).updateChildren(updates).await()
             
-            // 2. Ajouter à /technicians
+            // 2. Get updated account
+            val updatedAccount = getUserAccount(uid) ?: return AuthResult.Failure("Erreur de récupération")
+            
+            // 3. Add to /technicians
             FirebaseDatabase.getInstance().getReference("technicians")
                 .child(uid).setValue(updatedAccount).await()
                 
-            // 3. Supprimer de /invitations
+            // 4. Remove from /invitations
             FirebaseDatabase.getInstance().getReference("invitations")
                 .child(uid).removeValue().await()
                 
@@ -182,7 +267,7 @@ class FirebaseAuthRepository {
             user.delete().await()
             
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -193,7 +278,7 @@ class FirebaseAuthRepository {
             val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(user.email!!, password)
             user.reauthenticate(credential).await()
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -220,9 +305,9 @@ class FirebaseAuthRepository {
 
             database.child(uid).updateChildren(updates).await()
             
-            // Sync with technicians table if needed
-            val role = (updates["role"] as? String) ?: getUserAccount(uid)?.role?.name
-            if (role == UserRole.TECHNICIAN.name) {
+            // Sync with technicians table if activated
+            val account = getUserAccount(uid)
+            if (account?.role == UserRole.TECHNICIAN && !account.isFirstLogin) {
                  FirebaseDatabase.getInstance().getReference("technicians").child(uid).updateChildren(updates).await()
             }
             

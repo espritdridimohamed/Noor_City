@@ -37,13 +37,34 @@ data class Technician(
     val joinDate: String,
     val lastActivity: String,
     val zoneIds: List<String> = emptyList() // Zones covered by this technician
-)
-
-// EventLightingProgram and EventProgramStatus replaced by consolidated LightingProgram in LightingModels.kt
-
-enum class TechnicianAssignmentStatus {
-    WAITING, ACCEPTED, REJECTED
+) {
+    companion object {
+        fun fromUserAccount(user: UserAccount): Technician {
+            val specialty = when(user.specialty?.lowercase()) {
+                "électricité", "electrical" -> TechnicianSpecialty.ELECTRICAL
+                "réseau", "network" -> TechnicianSpecialty.NETWORK
+                "maintenance" -> TechnicianSpecialty.MAINTENANCE
+                "surveillance" -> TechnicianSpecialty.SURVEILLANCE
+                else -> TechnicianSpecialty.TECHNICAL_SUPPORT
+            }
+            return Technician(
+                id = user.uid,
+                name = user.name,
+                email = user.email,
+                specialty = specialty,
+                status = if (user.isVerified) TechnicianStatus.AVAILABLE else TechnicianStatus.OFFLINE,
+                phone = user.phoneNumber,
+                interventionsCount = 0,
+                successRate = 100f,
+                joinDate = "Récent",
+                lastActivity = "En ligne",
+                zoneIds = if (user.workingZone.isNotBlank()) listOf(user.workingZone) else emptyList()
+            )
+        }
+    }
 }
+
+// Note: TechnicianAssignmentStatus has been moved to CulturalEventModels.kt
 
 val mockTechnicians = listOf(
     Technician(

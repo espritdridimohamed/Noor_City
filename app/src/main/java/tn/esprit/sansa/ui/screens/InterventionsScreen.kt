@@ -156,7 +156,7 @@ private fun InterventionsMainScreen(
                 ) { index, intervention ->
                     StaggeredItem(index = index) {
                         Box {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = intervention,
                                 onDelete = { viewModel.deleteIntervention(intervention.id) }
                             ) { item ->
@@ -304,7 +304,11 @@ private fun InterventionCard(intervention: Intervention) {
                     Icon(intervention.type.icon, null, tint = intervention.type.color)
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(intervention.technicianName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.Engineering, null, modifier = Modifier.size(16.dp), tint = NoorBlue)
+                        Text(intervention.technicianName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Badge(containerColor = intervention.status.color) {
                             Text(intervention.status.displayName, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 4.dp))

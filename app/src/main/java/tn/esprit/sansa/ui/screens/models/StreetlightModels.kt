@@ -27,5 +27,11 @@ data class Streetlight(
     val powerConsumption: Double = 0.0,
     val address: String = "",
     val lastMaintenance: Long = System.currentTimeMillis(),
-    val installDate: Long = System.currentTimeMillis()
+    val installDate: Long = System.currentTimeMillis(),
+    
+    // ⚡ Noor Charge Fields
+    val hasCharger: Boolean = false,
+    val isChargingActive: Boolean = false,
+    val chargingEnergy: Double = 0.0, // Wh
+    val chargerStatus: String = "AVAILABLE" // AVAILABLE, OCCUPIED, ERROR
 )

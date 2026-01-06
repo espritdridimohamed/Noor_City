@@ -34,22 +34,26 @@ import tn.esprit.sansa.ui.viewmodels.StreetlightsViewModel
 import tn.esprit.sansa.ui.components.ModernSectionCard
 import androidx.compose.ui.graphics.toArgb
 import android.webkit.JavascriptInterface
+import kotlinx.coroutines.launch
 
 import tn.esprit.sansa.ui.theme.*
 import tn.esprit.sansa.ui.utils.QRCodeGenerator
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
+import tn.esprit.sansa.data.services.GeocodingService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddStreetlightScreen(
+    editingStreetlightId: String? = null,
     viewModel: StreetlightsViewModel = viewModel(),
     onAddSuccess: () -> Unit = {},
     onBackPressed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val isEditMode = editingStreetlightId != null
     var streetlightId by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("Sélectionnez un emplacement sur la carte...") }
     var selectedZone by remember { mutableStateOf<Zone?>(null) }
     var latitude by remember { mutableStateOf(36.8065) }
     var longitude by remember { mutableStateOf(10.1815) }
@@ -60,14 +64,38 @@ fun AddStreetlightScreen(
     var notes by remember { mutableStateOf("") }
     var showQRDialog by remember { mutableStateOf(false) }
     var generatedQRBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var isLoadingAddress by remember { mutableStateOf(false) }
+    var hasCharger by remember { mutableStateOf(false) }
 
     val zones by viewModel.zones.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    // Auto-generate ID on screen load OR load existing data
+    LaunchedEffect(editingStreetlightId) {
+        if (isEditMode) {
+            val streetlight = viewModel.getStreetlightById(editingStreetlightId!!)
+            if (streetlight != null) {
+                streetlightId = streetlight.id
+                address = streetlight.address
+                selectedZone = zones.find { it.id == streetlight.zoneId }
+                latitude = streetlight.latitude
+                longitude = streetlight.longitude
+                bulbType = streetlight.bulbType
+                status = streetlight.status
+                powerConsumption = streetlight.powerConsumption.toString()
+                hasCharger = streetlight.hasCharger
+            }
+        } else {
+            streetlightId = viewModel.generateNextStreetlightId()
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             AddStreetlightTopBar(
+                title = if (isEditMode) "Modifier Lampadaire" else "Nouveau Lampadaire",
                 onBackPressed = onBackPressed
             )
         }
@@ -84,12 +112,17 @@ fun AddStreetlightScreen(
                 ModernSectionCard(title = "Informations Générales", icon = Icons.Default.Info) {
                     OutlinedTextField(
                         value = streetlightId,
-                        onValueChange = { streetlightId = it.uppercase() },
-                        label = { Text("ID du lampadaire (ex: L001)") },
+                        onValueChange = {},
+                        label = { Text("ID du lampadaire (auto-généré)") },
                         leadingIcon = { Icon(Icons.Default.Tag, null) },
+                        trailingIcon = { Icon(Icons.Default.Lock, null, tint = Color.Gray) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NoorBlue)
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledBorderColor = NoorBlue.copy(alpha = 0.5f),
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                     
                     Spacer(Modifier.height(16.dp))
@@ -146,10 +179,17 @@ fun AddStreetlightScreen(
                     StreetlightMarkingMap(
                         lat = latitude,
                         lng = longitude,
+                        address = address,
                         statusColor = status.color,
                         onLocationChanged = { lat, lng ->
                             latitude = lat
                             longitude = lng
+                            // Fetch address automatically
+                            isLoadingAddress = true
+                            scope.launch {
+                                address = GeocodingService.getAddressFromCoordinates(lat, lng)
+                                isLoadingAddress = false
+                            }
                         }
                     )
                     
@@ -162,15 +202,6 @@ fun AddStreetlightScreen(
                         Text("Lon: ${String.format("%.5f", longitude)}", fontSize = 11.sp, color = NoorBlue)
                     }
 
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it },
-                        label = { Text("Adresse précise") },
-                        leadingIcon = { Icon(Icons.Default.Home, null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    )
                 }
             }
 
@@ -199,39 +230,110 @@ fun AddStreetlightScreen(
                 }
             }
 
+            // Noor Charge Toggle
+            item {
+                ModernSectionCard(title = "Options Noor Charge", icon = Icons.Default.ElectricBolt) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (hasCharger) NoorBlue.copy(alpha = 0.1f) else Color.Transparent)
+                            .border(1.dp, if (hasCharger) NoorBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
+                            .clickable { hasCharger = !hasCharger }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (hasCharger) NoorBlue else Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Power,
+                                null,
+                                tint = if (hasCharger) Color.White else Color.Gray
+                            )
+                        }
+                        
+                        Spacer(Modifier.width(16.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Borne de recharge",
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasCharger) NoorBlue else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Équiper ce lampadaire d'un hub de recharge",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Switch(
+                            checked = hasCharger,
+                            onCheckedChange = { hasCharger = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = NoorBlue
+                            )
+                        )
+                    }
+                }
+            }
+
             // Submit
             item {
                 Button(
                     onClick = {
-                        val light = Streetlight(
-                            id = streetlightId,
-                            bulbType = bulbType,
-                            status = status,
-                            zoneId = selectedZone?.id ?: "",
+                        val existing = if (isEditMode) viewModel.getStreetlightById(editingStreetlightId!!) else null
+                        val streetlight = existing?.copy(
+                            address = address,
                             latitude = latitude,
                             longitude = longitude,
+                            bulbType = bulbType,
+                            status = status,
                             powerConsumption = powerConsumption.toDoubleOrNull() ?: 0.0,
+                            zoneId = selectedZone?.id ?: "",
+                            hasCharger = hasCharger,
+                            chargerStatus = if (hasCharger) (existing.chargerStatus ?: "AVAILABLE") else "IDLE"
+                        ) ?: Streetlight(
+                            id = streetlightId,
                             address = address,
-                            lastMaintenance = System.currentTimeMillis(),
-                            installDate = System.currentTimeMillis()
+                            latitude = latitude,
+                            longitude = longitude,
+                            bulbType = bulbType,
+                            status = status,
+                            powerConsumption = powerConsumption.toDoubleOrNull() ?: 0.0,
+                            zoneId = selectedZone?.id ?: "",
+                            hasCharger = hasCharger,
+                            chargerStatus = if (hasCharger) "AVAILABLE" else "IDLE"
                         )
-                        viewModel.addStreetlight(light) { success ->
-                            if (success) {
-                                generatedQRBitmap = QRCodeGenerator.generateQRCode(streetlightId)
-                                showQRDialog = true
+                        if (isEditMode) {
+                            viewModel.updateStreetlight(streetlight) { success ->
+                                if (success) onAddSuccess()
+                            }
+                        } else {
+                            viewModel.addStreetlight(streetlight) { success ->
+                                if (success) {
+                                    generatedQRBitmap = QRCodeGenerator.generateQRCode(streetlightId)
+                                    showQRDialog = true
+                                }
                             }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp),
-                    enabled = streetlightId.isNotBlank() && selectedZone != null && address.isNotBlank(),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NoorIndigo),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = streetlightId.isNotBlank() && selectedZone != null && !address.contains("Sélectionnez") && !isLoadingAddress
                 ) {
-                    Icon(Icons.Default.Save, null)
+                    Icon(if (isEditMode) Icons.Default.Update else Icons.Default.Save, null)
                     Spacer(Modifier.width(12.dp))
-                    Text("Enregistrer le lampadaire", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (isEditMode) "Enregistrer les modifications" else "Enregistrer le lampadaire", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -298,6 +400,7 @@ fun AddStreetlightScreen(
 fun StreetlightMarkingMap(
     lat: Double,
     lng: Double,
+    address: String,
     statusColor: Color,
     onLocationChanged: (Double, Double) -> Unit
 ) {
@@ -335,6 +438,10 @@ fun StreetlightMarkingMap(
 
                 var marker = L.marker([$lat, $lng], {icon: icon, draggable: true}).addTo(map);
                 
+                if ("${address.replace("'", "\\'")}" !== "Sélectionnez un emplacement sur la carte...") {
+                    marker.bindPopup("${address.replace("'", "\\'")}").openPopup();
+                }
+
                 marker.on('dragend', function(e) {
                     var pos = marker.getLatLng();
                     if (window.Android && window.Android.onLocationPicked) {
@@ -349,7 +456,7 @@ fun StreetlightMarkingMap(
                     }
                 });
 
-                function updateMarker(newLat, newLng, newColor) {
+                function updateMarker(newLat, newLng, newColor, newAddress) {
                     map.setView([newLat, newLng]);
                     marker.setLatLng([newLat, newLng]);
                     var newIcon = L.divIcon({
@@ -359,6 +466,10 @@ fun StreetlightMarkingMap(
                         iconAnchor: [7, 7]
                     });
                     marker.setIcon(newIcon);
+                    
+                    if (newAddress && newAddress !== "Sélectionnez un emplacement sur la carte...") {
+                        marker.bindPopup(newAddress).openPopup();
+                    }
                 }
             </script>
         </body>
@@ -388,13 +499,17 @@ fun StreetlightMarkingMap(
             .height(250.dp)
             .clip(RoundedCornerShape(16.dp)),
         update = { webView ->
-            webView.loadUrl("javascript:updateMarker($lat, $lng, '$hexColor')")
+            webView.loadUrl("javascript:updateMarker($lat, $lng, '$hexColor', '${address.replace("'", "\\'")}')")
         }
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddStreetlightTopBar(onBackPressed: () -> Unit) {
+private fun AddStreetlightTopBar(
+    title: String = "Nouveau Lampadaire",
+    onBackPressed: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -418,8 +533,8 @@ private fun AddStreetlightTopBar(onBackPressed: () -> Unit) {
             }
             Spacer(Modifier.width(16.dp))
             Column {
-                Text("Nouveau lampadaire", color = Color.White.copy(0.9f), fontSize = 16.sp)
-                Text("Ajout au réseau", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                Text(title, color = Color.White.copy(0.9f), fontSize = 16.sp)
+                Text("Gestion Réseau", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
             }
         }
     }

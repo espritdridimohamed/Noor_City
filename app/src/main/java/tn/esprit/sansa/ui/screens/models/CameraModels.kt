@@ -38,5 +38,23 @@ data class Camera(
     val recordingEnabled: Boolean = true,
     val motionDetection: Boolean = true,
     val zone: String = "",
-    val streamUrl: String = ""
+    val streamUrl: String = "",
+    // Blockchain certification fields
+    val hasCertificate: Boolean = false,
+    val lastCertificateHash: String = "",
+    val lastCertificateTimestamp: Long = 0L,
+    val certificateCount: Int = 0,
+    val blockchainVerified: Boolean = false,
+    // AI Alert fields (Crash Detection)
+    val isAccidentActive: Boolean = false,
+    val alertStatus: String = "NORMAL", // NORMAL, ACCIDENT, OBSTACLE
+    // AI Analytics fields (New)
+    val detectedPeopleCount: Int = 0,
+    val detectedVehicleCount: Int = 0,
+    val safetyScore: Int = 100, // 0-100
+    val aiDescription: String = "Analyse fluide",
+    // AI Diagnostic fields
+    val lastAiDiagnostic: String = "Jamais effectué",
+    val aiSafetyReport: String = "Aucun rapport disponible"
 )
+

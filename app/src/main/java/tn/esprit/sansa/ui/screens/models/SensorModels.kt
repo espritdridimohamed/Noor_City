@@ -34,5 +34,9 @@ data class Sensor(
     val currentValue: String,
     val status: SensorStatus,
     val lastUpdate: String,
-    val batteryLevel: Int
+    val batteryLevel: Int,
+    // Champs AI & Heat Index
+    val humidity: Double = 0.0,
+    val heatIndex: Double = 0.0,
+    val riskLevel: Int = 0 // 0=Safe, 1=Caution, 2=Danger, 3=Extreme
 )

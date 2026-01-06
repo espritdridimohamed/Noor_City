@@ -32,14 +32,64 @@ enum class EventStatus(val displayName: String, val color: Color) {
 }
 
 data class CulturalEvent(
-    val id: String,
-    val name: String,
-    val dateTime: Date,
-    val zones: List<String>,
-    val ambianceType: AmbianceType,
-    val status: EventStatus,
-    val duration: Int, // en heures
-    val description: String,
-    val attendees: Int,
-    val organizer: String
+    val id: String = "",
+    val name: String = "",
+    val dateTime: Date = Date(),
+    val zones: List<String> = emptyList(),
+    val ambianceType: AmbianceType = AmbianceType.MODERN,
+    val status: EventStatus = EventStatus.PENDING,
+    val duration: Int = 0, // en heures
+    val description: String = "",
+    val attendees: Int = 0,
+    val organizer: String = ""
+)
+
+enum class LightingAmbience(
+    val displayName: String,
+    val color: Color,
+    val icon: ImageVector,
+    val intensity: Int, // Default intensity (0-100)
+    val description: String
+) {
+    FESTIVAL("Mode Festival", NoorOrange, Icons.Default.Celebration, 100, "Éclairage maximum et dynamique"),
+    ECO("Éco-Minuit", NoorIndigo, Icons.Default.NightsStay, 20, "Économie d'énergie, détection de mouvement"),
+    SECURITY("Alerte Sécurité", NoorRed, Icons.Default.Warning, 120, "Visibilité maximale pour urgences"),
+    NORMAL("Normal", NoorBlue, Icons.Default.Lightbulb, 70, "Éclairage standard optimisé")
+}
+
+data class TimelinePoint(
+    val hour: Int = 0, // 0-23
+    val minute: Int = 0, // 0-59
+    val intensity: Int = 0 // 0-100 (ou 120 pour sécurité)
+)
+
+enum class ProgramStatus(val displayName: String, val color: Color) { 
+    PENDING("En attente", NoorAmber), 
+    ACTIVE("Actif", NoorGreen), 
+    COMPLETED("Terminé", Color.Gray), 
+    CANCELLED("Annulé", NoorRed) 
+}
+
+enum class TechnicianAssignmentStatus(val displayName: String, val color: Color) { 
+    WAITING("En attente", NoorAmber), 
+    ACCEPTED("Accepté", NoorBlue), 
+    REJECTED("Refusé", NoorRed), 
+    COMPLETED("Terminé", NoorGreen) 
+}
+
+data class LightingProgram(
+    val id: String = "",
+    val name: String = "",
+    val rules: List<String> = emptyList(),
+    val timeline: List<TimelinePoint> = emptyList(),
+    val ambience: LightingAmbience = LightingAmbience.NORMAL,
+    val associatedStreetlights: List<String> = emptyList(),
+    var status: ProgramStatus = ProgramStatus.PENDING,
+    val createdDate: String = "",
+    val lastModified: String = "",
+    val priority: Int = 3,
+    val description: String = "",
+    val eventId: String? = null,
+    val technicianId: String? = null,
+    var technicianStatus: TechnicianAssignmentStatus = TechnicianAssignmentStatus.WAITING
 )

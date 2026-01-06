@@ -1,4 +1,6 @@
 package tn.esprit.sansa.ui.screens
+import android.util.Log
+
 
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -28,6 +30,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.facebook.CallbackManager
+import com.facebook.FacebookCallback
+import com.facebook.FacebookException
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import tn.esprit.sansa.R
 import tn.esprit.sansa.ui.theme.*
 import tn.esprit.sansa.ui.viewmodels.AuthState
@@ -38,7 +50,8 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
-    viewModel: AuthViewModel = viewModel()
+    viewModel: AuthViewModel = viewModel(),
+    allowAutoLogin: Boolean = true
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -46,9 +59,64 @@ fun LoginScreen(
     val authState by viewModel.authState.collectAsState()
     val context = LocalContext.current
 
+    // -- GOOGLE SIGN IN CONFIG --
+    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestEmail()
+        .requestIdToken(context.getString(R.string.default_web_client_id)) // This comes from google-services.json
+        .build()
+    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)!!
+                account.idToken?.let { viewModel.loginWithGoogle(it) }
+            } catch (e: ApiException) {
+                Log.e("Auth", "Google sign-in failed", e)
+                Toast.makeText(context, "Erreur Google: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // -- FACEBOOK LOGIN CONFIG --
+    val callbackManager = remember { CallbackManager.Factory.create() }
+    val facebookLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            callbackManager.onActivityResult(1, result.resultCode, result.data)
+        }
+    )
+
+    DisposableEffect(Unit) {
+        LoginManager.getInstance().registerCallback(callbackManager, object : FacebookCallback<LoginResult> {
+            override fun onSuccess(result: LoginResult) {
+                viewModel.loginWithFacebook(result.accessToken.token)
+            }
+            override fun onCancel() {
+                Toast.makeText(context, "Connexion annulée", Toast.LENGTH_SHORT).show()
+            }
+            override fun onError(error: FacebookException) {
+                Toast.makeText(context, "Erreur Facebook: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+        onDispose {
+            LoginManager.getInstance().unregisterCallback(callbackManager)
+        }
+    }
+
+    var observedLoading by remember { mutableStateOf(false) }
+
     LaunchedEffect(authState) {
+        if (authState is AuthState.Loading) {
+            observedLoading = true
+        }
         if (authState is AuthState.Authenticated) {
-            onLoginSuccess()
+            // Only auto-login if allowed OR if it's the result of an explicit action (loading happened)
+            if (allowAutoLogin || observedLoading) {
+                onLoginSuccess()
+            }
         } else if (authState is AuthState.Error) {
             Toast.makeText(context, (authState as AuthState.Error).message, Toast.LENGTH_LONG).show()
             viewModel.clearError()
@@ -225,12 +293,14 @@ fun LoginScreen(
                 ) {
                     SocialLoginButton(
                         icon = Icons.Default.GTranslate, 
-                        onClick = { /* TODO */ },
+                        onClick = { googleLauncher.launch(googleSignInClient.signInIntent) },
                         modifier = Modifier.weight(1f)
                     )
                     SocialLoginButton(
                         icon = Icons.Default.Facebook, 
-                        onClick = { /* TODO */ },
+                        onClick = { 
+                            LoginManager.getInstance().logInWithReadPermissions(context as androidx.activity.ComponentActivity, listOf("public_profile", "email")) 
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }

@@ -31,6 +31,13 @@ class FirebaseCamerasRepository {
                     val installDate = child.child("installDate").getValue(String::class.java) ?: ""
                     val lastMaintenance = child.child("lastMaintenance").getValue(String::class.java) ?: ""
                     val streamUrl = child.child("streamUrl").getValue(String::class.java) ?: ""
+                    val hasCertificate = child.child("hasCertificate").getValue(Boolean::class.java) ?: false
+                    val isAccidentActive = child.child("isAccidentActive").getValue(Boolean::class.java) ?: false
+                    val alertStatus = child.child("alertStatus").getValue(String::class.java) ?: "NORMAL"
+                    val detectedPeopleCount = child.child("detectedPeopleCount").getValue(Int::class.java) ?: 0
+                    val detectedVehicleCount = child.child("detectedVehicleCount").getValue(Int::class.java) ?: 0
+                    val safetyScore = child.child("safetyScore").getValue(Int::class.java) ?: 100
+                    val aiDescription = child.child("aiDescription").getValue(String::class.java) ?: "Analyse fluide"
 
                     Camera(
                         id = id,
@@ -45,7 +52,14 @@ class FirebaseCamerasRepository {
                         zone = zone,
                         installDate = installDate,
                         lastMaintenance = lastMaintenance,
-                        streamUrl = streamUrl
+                        streamUrl = streamUrl,
+                        hasCertificate = hasCertificate,
+                        isAccidentActive = isAccidentActive,
+                        alertStatus = alertStatus,
+                        detectedPeopleCount = detectedPeopleCount,
+                        detectedVehicleCount = detectedVehicleCount,
+                        safetyScore = safetyScore,
+                        aiDescription = aiDescription
                     )
                 }
                 trySend(cameras)
@@ -72,12 +86,32 @@ class FirebaseCamerasRepository {
             "zone" to camera.zone,
             "installDate" to camera.installDate,
             "lastMaintenance" to camera.lastMaintenance,
-            "streamUrl" to camera.streamUrl
+            "streamUrl" to camera.streamUrl,
+            "hasCertificate" to camera.hasCertificate,
+            "isAccidentActive" to camera.isAccidentActive,
+            "alertStatus" to camera.alertStatus,
+            "detectedPeopleCount" to camera.detectedPeopleCount,
+            "detectedVehicleCount" to camera.detectedVehicleCount,
+            "safetyScore" to camera.safetyScore,
+            "aiDescription" to camera.aiDescription
         )
         database.child(camera.id).setValue(cameraMap)
             .addOnCompleteListener { task ->
                 onComplete(task.isSuccessful)
             }
+    }
+
+    fun updateCameraStatus(camera: Camera) {
+        val updates = mapOf(
+            "hasCertificate" to camera.hasCertificate,
+            "isAccidentActive" to camera.isAccidentActive,
+            "alertStatus" to camera.alertStatus,
+            "detectedPeopleCount" to camera.detectedPeopleCount,
+            "detectedVehicleCount" to camera.detectedVehicleCount,
+            "safetyScore" to camera.safetyScore,
+            "aiDescription" to camera.aiDescription
+        )
+        database.child(camera.id).updateChildren(updates)
     }
 
     fun deleteCamera(id: String) {

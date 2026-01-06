@@ -183,14 +183,14 @@ fun TechOnboardingScreen(
 
                     Button(
                         onClick = {
-                            val isPhoneValid = phoneNumber.length >= 8
-                            val isZoneValid = selectedZone.isNotBlank()
+                            phoneError = phoneNumber.isBlank()
+                            zoneError = selectedZone.isBlank()
                             
-                            phoneError = !isPhoneValid
-                            zoneError = !isZoneValid
-
-                            if (isPhoneValid && isZoneValid) {
+                            if (!phoneError && !zoneError) {
                                 authViewModel.completeOnboarding(phoneNumber, selectedZone)
+                                // Navigate immediately after calling completeOnboarding
+                                // The LaunchedEffect will also trigger but that's okay
+                                onOnboardingComplete()
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),

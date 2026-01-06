@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
 import tn.esprit.sansa.ui.components.EmptyState
 import tn.esprit.sansa.ui.components.StaggeredItem
 import tn.esprit.sansa.ui.screens.models.*
@@ -62,17 +62,17 @@ fun LightingProgramsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<ProgramStatus?>(null) }
-    var selectedRuleType by remember { mutableStateOf<LightingRuleType?>(null) }
+    var selectedAmbience by remember { mutableStateOf<LightingAmbience?>(null) }
 
-    val filteredPrograms = remember(programsList.size, searchQuery, selectedStatus, selectedRuleType) {
+    val filteredPrograms = remember(programsList.size, searchQuery, selectedStatus, selectedAmbience) {
         programsList.filter { program ->
             val matchesSearch = searchQuery.isEmpty() ||
                     program.id.contains(searchQuery, ignoreCase = true) ||
                     program.name.contains(searchQuery, ignoreCase = true) ||
                     program.description.contains(searchQuery, ignoreCase = true)
             val matchesStatus = selectedStatus == null || program.status == selectedStatus
-            val matchesRuleType = selectedRuleType == null || program.rules.any { it.type == selectedRuleType }
-            matchesSearch && matchesStatus && matchesRuleType
+            val matchesAmbience = selectedAmbience == null || program.ambience == selectedAmbience
+            matchesSearch && matchesStatus && matchesAmbience
         }.sortedBy { it.name }
     }
 
@@ -80,7 +80,7 @@ fun LightingProgramsScreen(
         mapOf(
             "Total" to programsList.size,
             "Actifs" to programsList.count { it.status == ProgramStatus.ACTIVE },
-            "Planifiés" to programsList.count { it.status == ProgramStatus.SCHEDULED }
+            "En attente" to programsList.count { it.status == ProgramStatus.PENDING }
         )
     }
 
@@ -126,15 +126,15 @@ fun LightingProgramsScreen(
 
             item {
                 Text(
-                    "Filtrer par type de règle",
+                    "Filtrer par ambiance",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(Modifier.height(12.dp))
-                LightingRuleTypeFilters(
-                    selectedRuleType = selectedRuleType,
-                    onRuleTypeSelected = { selectedRuleType = if (selectedRuleType == it) null else it }
+                AmbienceFilters(
+                    selectedAmbience = selectedAmbience,
+                    onAmbienceSelected = { selectedAmbience = if (selectedAmbience == it) null else it }
                 )
             }
 
@@ -168,9 +168,9 @@ fun LightingProgramsScreen(
                 ) { index, program ->
                     Box {
                         StaggeredItem(index = index) {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = program,
-                                onDelete = { viewModel.deleteProgram(it.id) }
+                                onDelete = { viewModel.deleteProgram(program.id) }
                             ) { item ->
                                 LightingProgramCard(program = item)
                             }
@@ -350,28 +350,28 @@ private fun ProgramStatusFilters(
 }
 
 @Composable
-private fun LightingRuleTypeFilters(
-    selectedRuleType: LightingRuleType?,
-    onRuleTypeSelected: (LightingRuleType) -> Unit
+private fun AmbienceFilters(
+    selectedAmbience: LightingAmbience?,
+    onAmbienceSelected: (LightingAmbience) -> Unit
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.horizontalScroll(rememberScrollState())
     ) {
-        LightingRuleType.entries.forEach { type ->
-            val isSelected = selectedRuleType == type
+        LightingAmbience.values().forEach { ambience ->
+            val isSelected = selectedAmbience == ambience
             FilterChip(
-                onClick = { onRuleTypeSelected(type) },
-                label = { Text(type.displayName) },
+                onClick = { onAmbienceSelected(ambience) },
+                label = { Text(ambience.displayName) },
                 selected = isSelected,
                 leadingIcon = {
-                    Icon(type.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(ambience.icon, contentDescription = null, modifier = Modifier.size(18.dp))
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = type.color,
+                    selectedContainerColor = ambience.color,
                     selectedLabelColor = Color.White,
                     containerColor = MaterialTheme.colorScheme.surface,
-                    labelColor = type.color
+                    labelColor = ambience.color
                 )
             )
         }
@@ -420,13 +420,13 @@ private fun LightingProgramCard(program: LightingProgram) {
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(program.rules.firstOrNull()?.type?.color?.copy(alpha = 0.12f) ?: NoorBlue.copy(alpha = 0.12f)),
+                        .background(program.ambience.color.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        program.rules.firstOrNull()?.type?.icon ?: Icons.Default.AutoMode,
+                        program.ambience.icon,
                         contentDescription = null,
-                        tint = program.rules.firstOrNull()?.type?.color ?: NoorBlue,
+                        tint = program.ambience.color,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -517,15 +517,18 @@ private fun LightingProgramCard(program: LightingProgram) {
 
                     Spacer(Modifier.height(10.dp))
 
-                    Text("Règles", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Timeline Noor", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    program.rules.forEach { rule ->
+                    program.timeline.take(3).forEach { point ->
                         InfoRow(
-                            icon = rule.type.icon,
-                            label = rule.type.displayName,
-                            value = rule.parameters
+                            icon = Icons.Default.Schedule,
+                            label = "${point.hour}h${point.minute.toString().padStart(2, '0')}",
+                            value = "Intensité : ${point.intensity}%"
                         )
                         Spacer(Modifier.height(4.dp))
+                    }
+                    if (program.timeline.size > 3) {
+                        Text("+ ${program.timeline.size - 3} autres tranches", fontSize = 11.sp, color = NoorBlue)
                     }
 
                     Spacer(Modifier.height(14.dp))

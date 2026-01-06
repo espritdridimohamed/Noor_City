@@ -1,6 +1,8 @@
 // ZonesScreen.kt – Interface des zones avec design moderne aligné (Décembre 2025)
 package tn.esprit.sansa.ui.screens
 
+import tn.esprit.sansa.R
+
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -27,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -39,7 +42,7 @@ import androidx.compose.ui.unit.sp
 import tn.esprit.sansa.ui.theme.SansaTheme
 import androidx.compose.runtime.saveable.rememberSaveable
 import tn.esprit.sansa.ui.components.CoachMarkTooltip
-import tn.esprit.sansa.ui.components.SwipeToDeleteContainer
+import tn.esprit.sansa.ui.components.SwipeActionsContainer
 import tn.esprit.sansa.ui.components.EmptyState
 import tn.esprit.sansa.ui.components.StaggeredItem
 import androidx.compose.ui.graphics.toArgb
@@ -63,6 +66,7 @@ fun ZonesScreen(
     modifier: Modifier = Modifier
 ) {
     val zones by viewModel.zones.collectAsState()
+    val zoneWeather by viewModel.zoneWeather.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var showAddZone by remember { mutableStateOf(false) }
 
@@ -77,6 +81,7 @@ fun ZonesScreen(
     } else {
         ZonesMainScreen(
             zones = zones,
+            zoneWeather = zoneWeather,
             isLoading = isLoading,
             modifier = modifier,
             onNavigateToAddZone = { showAddZone = true },
@@ -90,6 +95,7 @@ fun ZonesScreen(
 @Composable
 private fun ZonesMainScreen(
     zones: List<Zone>,
+    zoneWeather: Map<String, ZoneWeatherInfo>,
     isLoading: Boolean,
     modifier: Modifier = Modifier,
     onNavigateToAddZone: () -> Unit,
@@ -236,11 +242,11 @@ private fun ZonesMainScreen(
                 ) { index, zone ->
                     Box {
                         StaggeredItem(index = index) {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = zone,
                                 onDelete = { onDeleteZone(zone) }
                             ) { item ->
-                                ZoneCard(zone = item)
+                                ZoneCard(zone = item, weatherInfo = zoneWeather[item.id])
                             }
                         }
 
@@ -520,7 +526,7 @@ private fun ZoneStatusFilters(
 }
 
 @Composable
-private fun ZoneCard(zone: Zone) {
+private fun ZoneCard(zone: Zone, weatherInfo: ZoneWeatherInfo? = null) {
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -641,6 +647,12 @@ private fun ZoneCard(zone: Zone) {
                     label = "Superficie",
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+            // Weather & Air Quality Widget
+            if (weatherInfo != null) {
+                Spacer(Modifier.height(16.dp))
+                WeatherAirWidget(weatherInfo)
             }
 
             AnimatedVisibility(
@@ -764,6 +776,82 @@ private fun InfoRow(
             Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
             Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
+    }
+}
+
+@Composable
+private fun WeatherAirWidget(info: ZoneWeatherInfo) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Weather Part
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            info.weather?.let { w ->
+                Text(
+                    text = "${w.temperature.toInt()}°C",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    color = NoorBlue
+                )
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = w.description.replaceFirstChar { it.uppercase() },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = stringResource(tn.esprit.sansa.R.string.humidity_label, w.humidity),
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            } ?: Text(stringResource(tn.esprit.sansa.R.string.weather_loading), color = Color.Gray, fontSize = 12.sp)
+        }
+
+        @Composable
+        fun VerticalDivider() {
+            Box(
+                modifier = Modifier
+                    .height(30.dp)
+                    .width(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+        }
+        
+        VerticalDivider()
+
+        // Air Quality Part
+        info.airQuality?.let { aq ->
+            Column(horizontalAlignment = Alignment.End) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(aq.color)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(tn.esprit.sansa.R.string.air_label, stringResource(aq.statusResId)),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = aq.color
+                    )
+                }
+                Text(
+                    text = stringResource(tn.esprit.sansa.R.string.aqi_label, aq.aqi),
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                )
+            }
+        } ?: Text(stringResource(tn.esprit.sansa.R.string.air_quality_loading), color = Color.Gray, fontSize = 12.sp)
     }
 }
 

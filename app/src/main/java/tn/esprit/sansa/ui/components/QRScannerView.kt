@@ -17,6 +17,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
+@OptIn(ExperimentalGetImage::class)
 @Composable
 fun QRScannerView(
     onCodeScanned: (String) -> Unit,
@@ -50,6 +51,7 @@ fun QRScannerView(
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor) { imageProxy ->
+                        @Suppress("UnsafeOptInUsageError")
                         val mediaImage = imageProxy.image
                         if (mediaImage != null) {
                             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)

@@ -17,8 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import tn.esprit.sansa.ui.screens.models.UserAccount
-import tn.esprit.sansa.ui.screens.models.UserRole
+import tn.esprit.sansa.data.repositories.FirebaseZonesRepository
+import tn.esprit.sansa.ui.screens.models.*
 import tn.esprit.sansa.ui.theme.NoorBlue
 import tn.esprit.sansa.ui.theme.NoorRed
 import tn.esprit.sansa.ui.viewmodels.AuthState
@@ -39,8 +39,12 @@ fun EditProfileScreen(
     var name by remember(currentUser) { mutableStateOf(currentUser?.name ?: "") }
     var email by remember(currentUser) { mutableStateOf(currentUser?.email ?: "") }
     var phone by remember(currentUser) { mutableStateOf(currentUser?.phoneNumber ?: "") }
-    var coordinates by remember(currentUser) { mutableStateOf(currentUser?.coordinates ?: "") }
+    var selectedZone by remember(currentUser) { mutableStateOf(currentUser?.workingZone ?: "") }
     var specialty by remember(currentUser) { mutableStateOf(currentUser?.specialty ?: "") }
+    
+    val zonesRepository = remember { FirebaseZonesRepository() }
+    val zones by zonesRepository.getZones().collectAsState(initial = emptyList())
+    var expanded by remember { mutableStateOf(false) }
     
     // Derived state
     val isTechnician = currentUser?.role == UserRole.TECHNICIAN
@@ -97,14 +101,37 @@ fun EditProfileScreen(
             
             Spacer(Modifier.height(16.dp))
             
-            OutlinedTextField(
-                value = coordinates,
-                onValueChange = { coordinates = it },
-                label = { Text("Coordonnées GPS") },
-                placeholder = { Text("ex: 36.8065, 10.1815") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Outlined.LocationOn, null) }
-            )
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedZone,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Ma Zone") },
+                    leadingIcon = { Icon(Icons.Outlined.LocationOn, null) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    zones.forEach { zone ->
+                        DropdownMenuItem(
+                            text = { Text(zone.name) },
+                            onClick = {
+                                selectedZone = zone.name
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
             
             if (isTechnician) {
                 Spacer(Modifier.height(16.dp))
@@ -139,7 +166,7 @@ fun EditProfileScreen(
                         "name" to name,
                         "email" to email,
                         "phoneNumber" to phone,
-                        "coordinates" to coordinates
+                        "workingZone" to selectedZone
                     )
                     if (isTechnician) {
                         updates["specialty"] = specialty

@@ -38,11 +38,16 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     
+    var observedLoading by remember { mutableStateOf(false) }
+    
     val authState by viewModel.authState.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(authState) {
-        if (authState is AuthState.Authenticated) {
+        if (authState is AuthState.Loading) {
+            observedLoading = true
+        }
+        if (authState is AuthState.Authenticated && observedLoading) {
             onRegisterSuccess()
         } else if (authState is AuthState.Error) {
             Toast.makeText(context, (authState as AuthState.Error).message, Toast.LENGTH_LONG).show()

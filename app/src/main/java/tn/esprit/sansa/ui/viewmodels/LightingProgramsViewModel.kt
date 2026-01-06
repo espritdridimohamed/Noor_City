@@ -10,6 +10,7 @@ import tn.esprit.sansa.data.repositories.FirebaseLightingRepository
 import tn.esprit.sansa.data.repositories.FirebaseStreetlightsRepository
 import tn.esprit.sansa.ui.screens.models.LightingProgram
 import tn.esprit.sansa.ui.screens.models.Streetlight
+import com.google.firebase.database.FirebaseDatabase
 
 class LightingProgramsViewModel : ViewModel() {
     private val lightingRepository = FirebaseLightingRepository()
@@ -47,8 +48,30 @@ class LightingProgramsViewModel : ViewModel() {
 
     fun addProgram(program: LightingProgram, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
-            lightingRepository.addProgram(program, onComplete)
+            lightingRepository.addProgram(program) { success, id ->
+                if (success && program.technicianId != null && id != null) {
+                    sendTechnicianNotification(program.copy(id = id))
+                }
+                onComplete(success)
+            }
         }
+    }
+
+    private fun sendTechnicianNotification(program: LightingProgram) {
+        val techId = program.technicianId ?: return
+        val notifRef = FirebaseDatabase.getInstance().getReference("notifications").child(techId).push()
+        
+        val notification = mapOf(
+            "id" to notifRef.key,
+            "title" to "Nouveau Programme assigné",
+            "message" to "Vous avez été assigné au programme : ${program.name}",
+            "timestamp" to System.currentTimeMillis(),
+            "type" to "LIGHTING_ASSIGNMENT",
+            "programId" to program.id,
+            "read" to false
+        )
+        
+        notifRef.setValue(notification)
     }
 
     fun deleteProgram(id: String) {

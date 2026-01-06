@@ -1,4 +1,4 @@
-package tn.esprit.sansa.ui.screens.onboarding
+package tn.esprit.sansa.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -65,110 +65,130 @@ fun OnboardingScreen(
 ) {
     val pagerState = rememberPagerState(pageCount = { onboardingPages.size })
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White) // Fond 100% blanc
+            .background(Color.White)
     ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) { pageIndex ->
-            val page = onboardingPages[pageIndex]
-
-            Box(
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White) // Pas de dégradé, blanc pur
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { pageIndex ->
+                val page = onboardingPages[pageIndex]
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White)
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Image principale
-                    Image(
-                        painter = painterResource(id = page.imageRes),
-                        contentDescription = null,
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Image principale
+                        Image(
+                            painter = painterResource(id = page.imageRes),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(320.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+
+                        Spacer(modifier = Modifier.height(48.dp))
+
+                        Text(
+                            text = page.title,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = page.description,
+                            fontSize = 18.sp,
+                            color = Color.Black.copy(alpha = 0.65f),
+                            textAlign = TextAlign.Center,
+                            lineHeight = 28.sp
+                        )
+                    }
+                }
+            }
+
+            // Indicateurs de page (dots)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(onboardingPages.size) { index ->
+                    val size by animateDpAsState(
+                        targetValue = if (pagerState.currentPage == index) 12.dp else 8.dp,
+                        animationSpec = tween(300)
+                    )
+
+                    Box(
                         modifier = Modifier
-                            .size(320.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                            .padding(horizontal = 4.dp)
+                            .size(size)
+                            .clip(CircleShape)
+                            .background(
+                                if (pagerState.currentPage == index) NoorBlue
+                                else Color.LightGray
+                            )
                     )
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(48.dp))
-
+            // Bouton "Se connecter" sur la dernière page
+            AnimatedVisibility(
+                visible = pagerState.currentPage == onboardingPages.lastIndex,
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
+            ) {
+                Button(
+                    onClick = onLoginClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NoorBlue),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
                     Text(
-                        text = page.title,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = page.description,
+                        "Se connecter",
                         fontSize = 18.sp,
-                        color = Color.Black.copy(alpha = 0.65f),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 28.sp
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
                     )
                 }
             }
         }
 
-        // Indicateurs de page (dots) - visibles sur blanc
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp),
-            horizontalArrangement = Arrangement.Center
+        // Bouton Ignorer (Skip)
+        TextButton(
+            onClick = onLoginClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .statusBarsPadding()
         ) {
-            repeat(onboardingPages.size) { index ->
-                val size by animateDpAsState(
-                    targetValue = if (pagerState.currentPage == index) 12.dp else 8.dp,
-                    animationSpec = tween(300)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(size)
-                        .clip(CircleShape)
-                        .background(
-                            if (pagerState.currentPage == index) NoorBlue
-                            else Color.LightGray
-                        )
-                )
-            }
-        }
-
-        // Bouton "Se connecter" sur la dernière page
-        AnimatedVisibility(
-            visible = pagerState.currentPage == onboardingPages.lastIndex,
-            modifier = Modifier.padding(horizontal = 32.dp, vertical = 16.dp)
-        ) {
-            Button(
-                onClick = onLoginClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NoorBlue),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    "Se connecter",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-            }
+            Text(
+                text = "Ignorer",
+                color = NoorBlue,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
     }
 }

@@ -42,13 +42,13 @@ import androidx.core.content.ContextCompat
 fun AddReclamationScreen(
     onAddSuccess: () -> Unit = {},
     onBackPressed: () -> Unit = {},
-    viewModel: ReclamationsViewModel = viewModel()
+    viewModel: ReclamationsViewModel = viewModel(),
+    currentUser: tn.esprit.sansa.ui.screens.models.UserAccount? = null
 ) {
     val context = LocalContext.current
     var location by remember { mutableStateOf("") }
     var streetlightId by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var reportedBy by remember { mutableStateOf("") }
     var priority by remember { mutableStateOf(ReclamationPriority.MEDIUM) }
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -74,28 +74,9 @@ fun AddReclamationScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 item { Spacer(Modifier.height(8.dp)) }
-
-                // Section Identité
-                item {
-                    ModernSectionCard(title = "Votre Identité", icon = Icons.Default.Person) {
-                        OutlinedTextField(
-                            value = reportedBy,
-                            onValueChange = { reportedBy = it },
-                            label = { Text("Nom complet") },
-                            placeholder = { Text("Ex: Ahmed Ben Ali") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = NoorBlue,
-                                cursorColor = NoorBlue
-                            )
-                        )
-                    }
-                }
 
                 // Section Localisation
                 item {
@@ -249,7 +230,7 @@ fun AddReclamationScreen(
                             val reclamation = Reclamation(
                                 description = description,
                                 location = location,
-                                reportedBy = reportedBy,
+                                reportedBy = currentUser?.name ?: "Anonyme",
                                 streetlightId = streetlightId,
                                 priority = priority
                             )
@@ -267,7 +248,7 @@ fun AddReclamationScreen(
                             .fillMaxWidth()
                             .height(64.dp)
                             .shadow(8.dp, RoundedCornerShape(32.dp)),
-                        enabled = !isSubmitting && description.isNotBlank() && location.isNotBlank() && reportedBy.isNotBlank(),
+                        enabled = !isSubmitting && description.isNotBlank() && location.isNotBlank(),
                         shape = RoundedCornerShape(32.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = NoorBlue,

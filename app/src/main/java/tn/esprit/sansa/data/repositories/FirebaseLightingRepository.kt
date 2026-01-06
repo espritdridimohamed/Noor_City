@@ -26,10 +26,10 @@ class FirebaseLightingRepository {
         awaitClose { database.removeEventListener(listener) }
     }
 
-    fun addProgram(program: LightingProgram, onComplete: (Boolean) -> Unit) {
+    fun addProgram(program: LightingProgram, onComplete: (Boolean, String?) -> Unit) {
         val id = program.id.ifBlank { database.push().key ?: return }
         database.child(id).setValue(program.copy(id = id))
-            .addOnCompleteListener { onComplete(it.isSuccessful) }
+            .addOnCompleteListener { onComplete(it.isSuccessful, id) }
     }
 
     fun deleteProgram(id: String, onComplete: (Boolean) -> Unit) {

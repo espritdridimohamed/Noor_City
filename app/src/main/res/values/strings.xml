@@ -1,3 +1,101 @@
 <resources>
-    <string name="app_name">NoorCity</string>
+    <!-- App Name -->
+    <string name="app_name">SmartCity</string>
+    <string name="app_name_display">Smart City</string>
+    <string name="app_tagline">Your Connected Urban Experience</string>
+    
+    <!-- Authentication Strings -->
+    <string name="login">Login</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="sign_in">Sign In</string>
+    <string name="create_account">Create Account</string>
+    <string name="logout">Logout</string>
+    
+    <!-- Input Fields -->
+    <string name="full_name">Full Name</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="enter_full_name">Enter your full name</string>
+    <string name="enter_email">Enter your email</string>
+    <string name="create_password">Create a password</string>
+    <string name="enter_password">Enter your password</string>
+    
+    <!-- Checkboxes & Links -->
+    <string name="remember_me">Remember me</string>
+    <string name="forgot_password">Forgot password?</string>
+    <string name="agree_terms">I agree to the Terms of Service and Privacy Policy</string>
+    
+    <!-- Social Login -->
+    <string name="or_continue_with">OR CONTINUE WITH</string>
+    <string name="google">Google</string>
+    <string name="facebook">Facebook</string>
+    <string name="github">GitHub</string>
+    
+    <!-- Messages -->
+    <string name="login_success">Welcome back, %s!</string>
+    <string name="signup_success">Account created successfully!</string>
+    <string name="welcome_message">Welcome, %s!</string>
+    <string name="login_success_message">You have successfully logged in to Smart City</string>
+    <string name="dashboard_placeholder">This is a placeholder dashboard. Integrate with your team modules here.</string>
+    
+    <!-- Footer -->
+    <string name="powered_by">Powered by Smart City Infrastructure</string>
+    
+    <!-- Content Descriptions -->
+    <string name="app_logo">Smart City Logo</string>
+    <string name="success_icon">Success Icon</string>
+    <string name="welcome">Welcome!</string>
+    <string name="welcome_illustration">Welcome Illustration</string>
+    <string name="back">Back</string>
+    
+    <!-- Welcome Screen -->
+    <string name="welcome_title">Get Started with Smart City</string>
+    <string name="welcome_subtitle">Explore and control your city your way. Discover powerful tools for modern urban management.</string>
+    <string name="get_started">Get Started</string>
+    <string name="have_account">Have an account?</string>
+    <string name="change_language">Change language</string>
+    <string name="language_english">English</string>
+    <string name="language_french">Français</string>
+    <string name="language_arabic">العربية</string>
+
+    <!-- Welcome Pager additional pages -->
+    <string name="welcome_page2_title">Plan, act, optimize</string>
+    <string name="welcome_page2_subtitle">Track energy, mobility and cleanliness in real time. Get smart insights for a more efficient and sustainable city.</string>
+    <string name="welcome_page3_title">Your city, at your fingertips</string>
+    <string name="welcome_page3_subtitle">Customize alerts, join local decisions, and discover nearby services — all in one place.</string>
+    
+    <!-- New Form Strings -->
+    <string name="email_address">Email Address</string>
+    <string name="email_hint">dewasiwa@gmail.com</string>
+    <string name="password_hint">•••••</string>
+    <string name="full_name_hint">Enter your full name</string>
+    <string name="create_account_title">Create Account</string>
+    <string name="or">OR</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="continue_with_facebook">Continue with Facebook</string>
+    
+    <!-- Login footer link to signup -->
+    <string name="have_no_account">Don\'t have an account?</string>
+    <string name="create_now">Create now</string>
+    <string name="existing_account_signed_in">Looks like you already have an account — we\'ve signed you in.</string>
+
+    <!-- Weather & Air Quality -->
+    <string name="humidity_label">Humidité : %1$d%%</string>
+    <string name="weather_loading">Météo...</string>
+    <string name="air_quality_loading">Qualité air...</string>
+    <string name="air_label">Air : %1$s</string>
+    <string name="aqi_label">AQI : %1$d/5</string>
+    
+    <!-- Air Quality Statuses -->
+    <string name="aqi_good">Bon</string>
+    <string name="aqi_fair">Passable</string>
+    <string name="aqi_moderate">Médiocre</string>
+    <string name="aqi_poor">Mauvais</string>
+    <string name="aqi_very_poor">Très Mauvais</string>
+    <string name="aqi_unknown">Inconnu</string>
+
+    <!-- Facebook SDK config -->
+    <string name="facebook_app_id">1545984583069337</string>
+    <string name="facebook_client_token">52b6d69d8ede47b7978aa8265789b140</string>
+    <string name="fb_login_protocol_scheme">fb1545984583069337</string>
 </resources>

@@ -25,6 +25,11 @@ class FirebaseSensorsRepository {
                     val battery = child.child("battery").getValue(Int::class.java) ?: 100
                     val streetlightName = child.child("streetlightName").getValue(String::class.java) ?: "Sansa Light"
                     
+                    // Nouveaux champs AI
+                    val humidity = child.child("humidity").getValue(Double::class.java) ?: 0.0
+                    val heatIndex = child.child("heatIndex").getValue(Double::class.java) ?: 0.0
+                    val riskLevel = child.child("riskLevel").getValue(Int::class.java) ?: 0
+
                     Sensor(
                         id = id,
                         type = SensorType.valueOf(typeStr),
@@ -33,7 +38,10 @@ class FirebaseSensorsRepository {
                         currentValue = value,
                         status = try { SensorStatus.valueOf(statusStr) } catch(e: Exception) { SensorStatus.ACTIVE },
                         lastUpdate = "En direct",
-                        batteryLevel = battery
+                        batteryLevel = battery,
+                        humidity = humidity,
+                        heatIndex = heatIndex,
+                        riskLevel = riskLevel
                     )
                 }
                 trySend(sensors)

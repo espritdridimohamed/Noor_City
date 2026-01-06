@@ -40,7 +40,8 @@ import java.util.*
 @Composable
 fun ReclamationsScreen(
     modifier: Modifier = Modifier,
-    viewModel: ReclamationsViewModel = viewModel()
+    viewModel: ReclamationsViewModel = viewModel(),
+    currentUser: tn.esprit.sansa.ui.screens.models.UserAccount? = null
 ) {
     var showAddReclamation by remember { mutableStateOf(false) }
 
@@ -48,7 +49,8 @@ fun ReclamationsScreen(
         AddReclamationScreen(
             onAddSuccess = { showAddReclamation = false },
             onBackPressed = { showAddReclamation = false },
-            viewModel = viewModel
+            viewModel = viewModel,
+            currentUser = currentUser
         )
     } else {
         ReclamationsMainScreen(
@@ -157,7 +159,7 @@ private fun ReclamationsMainScreen(
                 ) { index, reclamation ->
                     StaggeredItem(index = index) {
                         Box {
-                            SwipeToDeleteContainer(
+                            SwipeActionsContainer(
                                 item = reclamation,
                                 onDelete = { viewModel.deleteReclamation(reclamation.id) }
                             ) { item ->
@@ -307,23 +309,29 @@ private fun ReclamationCard(reclamation: Reclamation) {
                     Icon(Icons.Default.ReportProblem, null, tint = reclamation.priority.color)
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(reclamation.reportedBy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Badge(containerColor = reclamation.status.color) { 
-                        Text(reclamation.status.displayName, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 4.dp)) 
+                    Text(reclamation.description, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Badge(containerColor = reclamation.status.color) { 
+                            Text(reclamation.status.displayName, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 4.dp)) 
+                        }
+                        Text(
+                            "Par ${reclamation.reportedBy}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null)
             }
 
-            Spacer(Modifier.height(14.dp))
-            Text(reclamation.description, maxLines = if (expanded) Int.MAX_VALUE else 2, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            
             AnimatedVisibility(visible = expanded) {
                 Column {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     InfoRow(Icons.Default.LocationOn, "Lieu", reclamation.location)
                     InfoRow(Icons.Default.CalendarToday, "Date", SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(reclamation.date)))
-                    if (reclamation. streetlightId.isNotBlank()) InfoRow(Icons.Default.Lightbulb, "ID Lampadaire", reclamation.streetlightId)
+                    InfoRow(Icons.Default.PriorityHigh, "Priorité", reclamation.priority.displayName)
+                    if (reclamation.streetlightId.isNotBlank()) InfoRow(Icons.Default.Lightbulb, "ID Lampadaire", reclamation.streetlightId)
                 }
             }
         }
