@@ -30,7 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.facebook.CallbackManager
+import tn.esprit.sansa.auth.FacebookCallbackHolder
 import com.facebook.FacebookCallback
 import com.facebook.FacebookException
 import com.facebook.login.LoginManager
@@ -81,13 +81,7 @@ fun LoginScreen(
     )
 
     // -- FACEBOOK LOGIN CONFIG --
-    val callbackManager = remember { CallbackManager.Factory.create() }
-    val facebookLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = { result ->
-            callbackManager.onActivityResult(1, result.resultCode, result.data)
-        }
-    )
+    val callbackManager = FacebookCallbackHolder.callbackManager
 
     DisposableEffect(Unit) {
         LoginManager.getInstance().registerCallback(callbackManager, object : FacebookCallback<LoginResult> {
