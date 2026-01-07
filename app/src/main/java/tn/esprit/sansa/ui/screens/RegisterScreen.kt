@@ -5,8 +5,11 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tn.esprit.sansa.ui.theme.*
 import tn.esprit.sansa.ui.viewmodels.AuthState
@@ -42,6 +46,24 @@ fun RegisterScreen(
     
     val authState by viewModel.authState.collectAsState()
     val context = LocalContext.current
+    val isDarkMode = isSystemInDarkTheme()
+
+    // Theme colors for dark/light mode
+    val bgGradientColors = if (isDarkMode) {
+        listOf(Color(0xFF0D1B2A), Color(0xFF1B2D42))
+    } else {
+        listOf(NoorBlue, NoorIndigo)
+    }
+    
+    val cardBgColor = if (isDarkMode) Color(0xFF1A2A3A).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.95f)
+    val textColorPrimary = if (isDarkMode) Color.White else Color.Black
+    val textColorSecondary = if (isDarkMode) Color(0xFFB0B0B0) else Color(0xFF666666)
+    val inputBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.LightGray.copy(alpha = 0.5f)
+    val inputLabelColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF1A1A1A)
+    val inputTextColor = if (isDarkMode) Color.White else Color.Black
+    val inputIconColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.7f)
+    val focusedBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else NoorBlue
+    val focusedLabelColor = if (isDarkMode) Color.White else NoorBlue
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Loading) {
@@ -58,43 +80,28 @@ fun RegisterScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Brush.verticalGradient(bgGradientColors))
     ) {
-        // Decorative background elements
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .size(400.dp)
-                .offset(x = (-100).dp, y = 100.dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(NoorBlue.copy(alpha = 0.1f), Color.Transparent)
-                    ),
-                    shape = RoundedCornerShape(200.dp)
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .padding(horizontal = 32.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Back button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBackPressed,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(NoorBlue.copy(alpha = 0.05f))
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    Icon(Icons.Default.ArrowBackIos, contentDescription = "Retour", tint = NoorBlue, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -102,135 +109,149 @@ fun RegisterScreen(
             
             Text(
                 "Créer un compte",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                modifier = Modifier.align(Alignment.Start),
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White,
                 letterSpacing = (-1).sp
             )
             Text(
                 "Rejoignez l'aventure NoorCity",
                 fontSize = 15.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(top = 8.dp).align(Alignment.Start)
+                color = Color.White.copy(alpha = 0.8f)
             )
 
             Spacer(Modifier.height(48.dp))
 
-            // Form
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            // Glasmorphism card
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                shape = RoundedCornerShape(32.dp),
+                color = cardBgColor,
+                shadowElevation = 16.dp
             ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = { Text("Nom complet", color = Color.Gray.copy(alpha = 0.6f)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Person, null, tint = NoorBlue.copy(alpha = 0.7f), modifier = Modifier.size(20.dp)) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f),
-                        focusedContainerColor = NoorBlue.copy(alpha = 0.02f),
-                        unfocusedContainerColor = NoorBlue.copy(alpha = 0.02f)
-                    )
-                )
-
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    placeholder = { Text("Adresse email", color = Color.Gray.copy(alpha = 0.6f)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Email, null, tint = NoorBlue.copy(alpha = 0.7f), modifier = Modifier.size(20.dp)) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f),
-                        focusedContainerColor = NoorBlue.copy(alpha = 0.02f),
-                        unfocusedContainerColor = NoorBlue.copy(alpha = 0.02f)
-                    )
-                )
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    placeholder = { Text("Mot de passe", color = Color.Gray.copy(alpha = 0.6f)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Lock, null, tint = NoorBlue.copy(alpha = 0.7f), modifier = Modifier.size(20.dp)) },
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                null,
-                                tint = Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f),
-                        focusedContainerColor = NoorBlue.copy(alpha = 0.02f),
-                        unfocusedContainerColor = NoorBlue.copy(alpha = 0.02f)
-                    )
-                )
-
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    placeholder = { Text("Confirmer le mot de passe", color = Color.Gray.copy(alpha = 0.6f)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.VerifiedUser, null, tint = NoorBlue.copy(alpha = 0.7f), modifier = Modifier.size(20.dp)) },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NoorBlue,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f),
-                        focusedContainerColor = NoorBlue.copy(alpha = 0.02f),
-                        unfocusedContainerColor = NoorBlue.copy(alpha = 0.02f)
-                    )
-                )
-
-                Spacer(Modifier.height(24.dp))
-
-                Button(
-                    onClick = {
-                        if (password == confirmPassword) {
-                            viewModel.registerCitizen(name, email, password)
-                        } else {
-                            Toast.makeText(context, "Mots de passe différents", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NoorBlue),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-                    enabled = authState !is AuthState.Loading && name.isNotBlank() && email.isNotBlank() && password.length >= 6
+                Column(
+                    modifier = Modifier.padding(28.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (authState is AuthState.Loading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text("S'inscrire maintenant", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nom complet", color = inputLabelColor) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Person, null, tint = inputIconColor) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Adresse email", color = inputLabelColor) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Outlined.Email, null, tint = inputIconColor) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Mot de passe", color = inputLabelColor) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = inputIconColor) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    null,
+                                    tint = inputIconColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it },
+                        label = { Text("Confirmer mot de passe", color = inputLabelColor) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.VerifiedUser, null, tint = inputIconColor) },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor
+                        )
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            if (password == confirmPassword) {
+                                viewModel.registerCitizen(name, email, password)
+                            } else {
+                                Toast.makeText(context, "Mots de passe différents", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = NoorBlue),
+                        enabled = authState !is AuthState.Loading && name.isNotBlank() && email.isNotBlank() && password.length >= 6
+                    ) {
+                        if (authState is AuthState.Loading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("S'inscrire", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(32.dp))
 
             Text(
                 text = "En s'inscrivant, vous acceptez nos Conditions d'utilisation",
                 fontSize = 11.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(bottom = 32.dp)
+                color = Color.White.copy(alpha = 0.7f)
             )
         }
     }

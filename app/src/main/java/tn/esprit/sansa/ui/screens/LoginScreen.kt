@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +59,24 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     val authState by viewModel.authState.collectAsState()
     val context = LocalContext.current
+    val isDarkMode = isSystemInDarkTheme()
+
+    // Theme colors for dark/light mode
+    val bgGradientColors = if (isDarkMode) {
+        listOf(Color(0xFF0D1B2A), Color(0xFF1B2D42))
+    } else {
+        listOf(NoorBlue, NoorIndigo)
+    }
+    
+    val cardBgColor = if (isDarkMode) Color(0xFF1A2A3A).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.95f)
+    val textColorPrimary = if (isDarkMode) Color.White else Color.Black
+    val textColorSecondary = if (isDarkMode) Color(0xFFB0B0B0) else Color(0xFF666666)
+    val inputBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.LightGray.copy(alpha = 0.5f)
+    val inputLabelColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF1A1A1A)
+    val inputTextColor = if (isDarkMode) Color.White else Color.Black
+    val inputIconColor = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.7f)
+    val focusedBorderColor = if (isDarkMode) Color.White.copy(alpha = 0.5f) else NoorBlue
+    val focusedLabelColor = if (isDarkMode) Color.White else NoorBlue
 
     // -- GOOGLE SIGN IN CONFIG --
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -121,9 +140,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    listOf(NoorBlue, NoorIndigo)
-                )
+                Brush.verticalGradient(bgGradientColors)
             )
     ) {
         // Decorative floating elements
@@ -132,14 +149,14 @@ fun LoginScreen(
                 .align(Alignment.TopEnd)
                 .size(300.dp)
                 .offset(x = 100.dp, y = (-50).dp)
-                .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                .background(Color.White.copy(alpha = 0.05f), CircleShape)
         )
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .size(200.dp)
                 .offset(x = (-50).dp, y = 50.dp)
-                .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                .background(Color.White.copy(alpha = 0.05f), CircleShape)
         )
 
         Column(
@@ -193,7 +210,7 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
                 shape = RoundedCornerShape(32.dp),
-                color = Color.White.copy(alpha = 0.95f),
+                color = cardBgColor,
                 shadowElevation = 16.dp
             ) {
                 Column(
@@ -204,21 +221,27 @@ fun LoginScreen(
                         "Se connecter",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black,
+                        color = textColorPrimary,
                         modifier = Modifier.padding(bottom = 24.dp)
                     )
 
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Adresse email") },
+                        label = { Text("Adresse email", color = inputLabelColor) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         singleLine = true,
-                        leadingIcon = { Icon(Icons.Outlined.Email, null, tint = NoorBlue) },
+                        leadingIcon = { Icon(Icons.Outlined.Email, null, tint = inputIconColor) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NoorBlue,
-                            unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor,
+                            focusedPlaceholderColor = textColorSecondary,
+                            unfocusedPlaceholderColor = textColorSecondary
                         )
                     )
 
@@ -227,24 +250,30 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Mot de passe") },
+                        label = { Text("Mot de passe", color = inputLabelColor) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         singleLine = true,
-                        leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = NoorBlue) },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, null, tint = inputIconColor) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
                                     if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                     null,
-                                    tint = Color.Gray
+                                    tint = inputIconColor
                                 )
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NoorBlue,
-                            unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
+                            focusedBorderColor = focusedBorderColor,
+                            unfocusedBorderColor = inputBorderColor,
+                            focusedLabelColor = focusedLabelColor,
+                            unfocusedLabelColor = inputLabelColor,
+                            focusedTextColor = inputTextColor,
+                            unfocusedTextColor = inputTextColor,
+                            focusedPlaceholderColor = textColorSecondary,
+                            unfocusedPlaceholderColor = textColorSecondary
                         )
                     )
 
@@ -253,7 +282,7 @@ fun LoginScreen(
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(onClick = onNavigateToForgotPassword) {
-                            Text("Mot de passe oublié ?", color = NoorBlue, fontSize = 13.sp)
+                            Text("Mot de passe oublié ?", color = if (isDarkMode) Color.White.copy(alpha = 0.7f) else NoorBlue, fontSize = 13.sp)
                         }
                     }
 
@@ -271,7 +300,7 @@ fun LoginScreen(
                         if (authState is AuthState.Loading) {
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         } else {
-                            Text("Se connecter", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text("Se connecter", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -279,7 +308,7 @@ fun LoginScreen(
 
             // Social/Register section
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Ou continuer avec", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                Text("Ou continuer avec", color = Color.White.copy(alpha = if (isDarkMode) 0.6f else 0.7f), fontSize = 14.sp)
                 Spacer(Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.width(200.dp),
@@ -288,21 +317,23 @@ fun LoginScreen(
                     SocialLoginButton(
                         icon = Icons.Default.GTranslate, 
                         onClick = { googleLauncher.launch(googleSignInClient.signInIntent) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        isDarkMode = isDarkMode
                     )
                     SocialLoginButton(
                         icon = Icons.Default.Facebook, 
                         onClick = { 
                             LoginManager.getInstance().logInWithReadPermissions(context as androidx.activity.ComponentActivity, listOf("public_profile", "email")) 
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        isDarkMode = isDarkMode
                     )
                 }
                 
                 Spacer(Modifier.height(40.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Nouveau ici ?", color = Color.White.copy(alpha = 0.8f))
+                    Text("Nouveau ici ?", color = Color.White.copy(alpha = if (isDarkMode) 0.7f else 0.8f))
                     TextButton(onClick = onNavigateToRegister) {
                         Text("Créer un compte", color = Color.White, fontWeight = FontWeight.Bold)
                     }
@@ -317,14 +348,18 @@ fun LoginScreen(
 fun SocialLoginButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkMode: Boolean = isSystemInDarkTheme()
 ) {
+    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.2f) else Color.LightGray.copy(alpha = 0.4f)
+    val contentColor = Color.White
+    
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(56.dp),
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = contentColor)
     ) {
         Icon(icon, null, modifier = Modifier.size(24.dp))
     }
